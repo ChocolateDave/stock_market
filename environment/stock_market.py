@@ -1,10 +1,8 @@
 import gym
 import numpy as np
 
-# TODO: market maker agent
+# TODO: market maker agent (maybe not needed)
 # TODO: HMM
-# TODO: Use spread to determine next step's volatility
-# TODO: implement CRRA utility of budget and shares held, use log
 class StockMarketEnv(gym.Env):
     # Changes by minute
     def __init__(self, seed=0):
@@ -21,6 +19,7 @@ class StockMarketEnv(gym.Env):
         self.worth_of_stocks = 0.1
         self.timestep = 0.
         self.ep_len = 390
+        self.noise = 10.
         correlated_stocks = np.random.normal(loc=self.start_price, scale=self.std, size=(self.num_correlated_stocks))
         uncorrelated_stocks = np.random.normal(loc=self.start_price, scale=self.std, size=(self.num_uncorrelated_stocks))
         self.curr_state = {
@@ -36,16 +35,35 @@ class StockMarketEnv(gym.Env):
         return self.curr_state
 
     def reset(self):
+        np.random.seed = self.seed
+        self.num_agents = 10
+        self.num_correlated_stocks = 19
+        self.num_uncorrelated_stocks = 10
+        self.num_company_states = 5
+        self.start_price = 100.
+        self.curr_price = self.start_price
         self.std = 100.
+        self.worth_of_stocks = 0.1
+        self.timestep = 0.
+        self.ep_len = 390
+        self.noise = 10.
         correlated_stocks = np.random.normal(loc=self.start_price, scale=self.std, size=(self.num_correlated_stocks))
-        self.curr_state = {'stock_price': np.asarray(self.start_price), 'correlated_stocks': correlated_stocks, 'company_states': np.zeros((self.num_company_states))}
+        uncorrelated_stocks = np.random.normal(loc=self.start_price, scale=self.std, size=(self.num_uncorrelated_stocks))
+        self.curr_state = {
+                            'stock_price': np.asarray(self.start_price), 
+                            'correlated_stocks': correlated_stocks, 
+                            'uncorrelated_stocks': uncorrelated_stocks,
+                            'company_states': np.zeros((self.num_company_states)),
+                            'budgets': np.asarray([100., 100., 100., 100., 100., 1000., 1000., 1000., 1000., 10000.]),
+                            'shares_held': np.asarray([500., 500., 500., 500., 500., 500., 500., 500., 500., 500.]),
+                          }
 
     def step(self, action: np.array):
         curr_price = self.curr_state['stock_price']
-        profits, final_shares, close = self.clear(np.copy(action), self.curr_state['stock_price'])
+        profits, final_shares, close, volatility = self.clear(np.copy(action), self.curr_state['stock_price'])
         self.curr_state['stock_price'] = np.clip(close, 0, None)
         diff = close - curr_price
-        diffs = diff / curr_price * self.curr_state['correlated_stocks'] + np.random.normal(loc = 0, scale = self.std, size=(self.num_correlated_stocks))
+        diffs = diff / curr_price * self.curr_state['correlated_stocks'] + np.random.normal(loc = 0, scale = self.noise * volatility, size=(self.num_correlated_stocks))
         self.curr_state['correlated_stocks'] += diffs
         self.curr_state['correlated_stocks'] = np.clip(self.curr_state['correlated_stocks'], 1, None)
         self.curr_state['uncorrelated_stocks'] += np.random.normal(loc = 0, scale = self.std, size=(self.num_uncorrelated_stocks))
@@ -67,6 +85,8 @@ class StockMarketEnv(gym.Env):
     # Technically, this is screwing over sellers, as there are no market makers here.
     # TODO: Cleanup
     def clear(self, action: np.array, close):
+        volatility =  1.
+        share_prices = [] # the standard deviation of share_prices will determine correlated stock standard deviation
         n, _ = action.shape
         bidders = action[action[:, 0] > 0, :]
         sellers = action[action[:, 0] < 0, :]
@@ -90,6 +110,7 @@ class StockMarketEnv(gym.Env):
                 ask_price = np.abs(ask_price)
                 if bid_price >= ask_price: # this may change when adding market maker
                     close = np.abs(sellers[ask_idx, 0]) # sellers are technically last in transaction even with market markers
+                    share_prices.append(bidders[bid_idx, 0], np.abs(sellers[ask_idx, 0]))
                     if bid_vol < ask_vol:
                         sellers[ask_idx, 1] -= bid_vol
                         bidders[bid_idx, 1] = 0.
@@ -113,6 +134,8 @@ class StockMarketEnv(gym.Env):
             np.delete(seller_indices, np.asarray(to_delete))
             i += 1
         
+        volatility += np.std(share_prices)
+
         profits = np.zeros((n))
         final_shares = action[:, 1]
         bid_profit_idx = 0
@@ -128,16 +151,7 @@ class StockMarketEnv(gym.Env):
                 profits[i] = seller_profits[ask_profit_idx]
                 final_shares[i] = sellers[ask_profit_idx, 1]
                 ask_profit_idx += 1 
-        return profits, final_shares, close
-
-
-
-        
-
-    # will need two continuous numbers: share price and share volume. Share volume must always be positive integers, so log it and truncate
-    # need to add shares into state then. 
-    # do I need budget in the state?
-    # complete clearing
+        return profits, final_shares, close, volatility
         
 
 
