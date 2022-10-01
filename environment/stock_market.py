@@ -3,6 +3,7 @@ import numpy as np
 
 # TODO: market maker agent
 # TODO: HMM
+# TODO: Use spread to determine next step's volatility
 class StockMarketEnv(gym.Env):
     # Changes by minute
     def __init__(self, seed=0):
@@ -16,6 +17,8 @@ class StockMarketEnv(gym.Env):
         self.start_price = 100.
         self.curr_price = self.start_price
         self.std = 100.
+        self.timestep = 0.
+        self.ep_len = 390
         correlated_stocks = np.random.normal(loc=self.start_price, scale=self.std, size=(self.num_correlated_stocks))
         uncorrelated_stocks = np.random.normal(loc=self.start_price, scale=self.std, size=(self.num_uncorrelated_stocks))
         self.curr_state = {
@@ -36,14 +39,24 @@ class StockMarketEnv(gym.Env):
         self.curr_state = {'stock_price': np.asarray(self.start_price), 'correlated_stocks': correlated_stocks, 'company_states': np.zeros((self.num_company_states))}
 
     def step(self, action: np.array):
+        curr_price = self.curr_state['stock_price']
         profits, final_shares, close = self.clear(np.copy(action), self.curr_state['stock_price'])
         self.curr_state['stock_price'] = np.clip(close, 0, None)
-        diff = close - self.curr_price
-        diffs = diff / self.curr_price * self.curr_state['correlated_stocks'] + np.random.normal(loc = 0, scale = self.std, size=(self.num_correlated_stocks))
+        diff = close - curr_price
+        diffs = diff / curr_price * self.curr_state['correlated_stocks'] + np.random.normal(loc = 0, scale = self.std, size=(self.num_correlated_stocks))
         self.curr_state['correlated_stocks'] += diffs
         self.curr_state['correlated_stocks'] = np.clip(self.curr_state['correlated_stocks'], 1, None)
         self.curr_state['uncorrelated_stocks'] += np.random.normal(loc = 0, scale = self.std, size=(self.num_uncorrelated_stocks))
         self.curr_state['uncorrelated_stocks'] = np.clip(self.curr_state['uncorrelated_stocks'], 1, None)
+        self.curr_state['budgets'] += profits
+        self.curr_state['shares_held'] = final_shares
+        # TODO: rewards should take into consideration the budgets and shares_held and market price
+        rewards = np.where((profits < 0.) or (final_shares < 0.), -10000, profits)
+        self.timestep += 1
+        if np.any((profits < 0.) or (final_shares < 0.)):
+            return self.curr_state, rewards, True, None, None, None, True
+        return self.curr_state, rewards, False, None, None, None, self.timestep >= self.ep_len
+
         # implement hmmlearn
 
     # Your broker or clearing institution typically does this in real life
@@ -74,12 +87,12 @@ class StockMarketEnv(gym.Env):
                 ask_price, ask_vol = sellers[ask_idx, :]
                 ask_price = np.abs(ask_price)
                 if bid_price >= ask_price: # this may change when adding market maker
-                    close = sellers[ask_idx, 0] # sellers are technically last in transaction even with market markers
+                    close = np.abs(sellers[ask_idx, 0]) # sellers are technically last in transaction even with market markers
                     if bid_vol < ask_vol:
                         sellers[ask_idx, 1] -= bid_vol
                         bidders[bid_idx, 1] = 0.
                         bid_profits[bid_idx] -= bid_vol * bidders[bid_idx, 0]
-                        seller_profits[ask_idx] += bid_vol * sellers[ask_idx, 0]
+                        seller_profits[ask_idx] += bid_vol * np.abs(sellers[ask_idx, 0])
                         break
                     elif bid_vol > ask_vol:
                         sellers[ask_idx, 1] = 0.
@@ -87,13 +100,13 @@ class StockMarketEnv(gym.Env):
                         bid_vol -= ask_vol
                         to_delete.append(j)
                         bid_profits[bid_idx] -= ask_vol * bidders[bid_idx, 0]
-                        seller_profits[ask_idx] += ask_vol * sellers[ask_idx, 0]
+                        seller_profits[ask_idx] += ask_vol * np.abs(sellers[ask_idx, 0])
                     else:
                         sellers[ask_idx, 1] = 0.
                         bidders[bid_idx, 1] = 0.
                         to_delete.append(j)
                         bid_profits[bid_idx] -= bid_vol * bidders[bid_idx, 0]
-                        seller_profits[ask_idx] += ask_vol * sellers[ask_idx, 0]
+                        seller_profits[ask_idx] += ask_vol * np.abs(sellers[ask_idx, 0])
                         break
             np.delete(seller_indices, np.asarray(to_delete))
             i += 1
