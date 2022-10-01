@@ -4,6 +4,7 @@ import numpy as np
 # TODO: market maker agent
 # TODO: HMM
 # TODO: Use spread to determine next step's volatility
+# TODO: implement CRRA utility of budget and shares held, use log
 class StockMarketEnv(gym.Env):
     # Changes by minute
     def __init__(self, seed=0):
@@ -17,6 +18,7 @@ class StockMarketEnv(gym.Env):
         self.start_price = 100.
         self.curr_price = self.start_price
         self.std = 100.
+        self.worth_of_stocks = 0.1
         self.timestep = 0.
         self.ep_len = 390
         correlated_stocks = np.random.normal(loc=self.start_price, scale=self.std, size=(self.num_correlated_stocks))
@@ -50,7 +52,7 @@ class StockMarketEnv(gym.Env):
         self.curr_state['uncorrelated_stocks'] = np.clip(self.curr_state['uncorrelated_stocks'], 1, None)
         self.curr_state['budgets'] += profits
         self.curr_state['shares_held'] = final_shares
-        # TODO: rewards should take into consideration the budgets and shares_held and market price
+        rewards = np.log(self.curr_state['budgets'] + self.curr_state['shares_held'] * self.curr_state['stock_price'] * self.worth_of_stocks)
         rewards = np.where((profits < 0.) or (final_shares < 0.), -10000, profits)
         self.timestep += 1
         if np.any((profits < 0.) or (final_shares < 0.)):
