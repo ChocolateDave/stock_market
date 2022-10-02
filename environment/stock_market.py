@@ -17,7 +17,7 @@ class StockMarketEnv(gym.Env):
         self.curr_price = self.start_price
         self.std = 100.
         self.worth_of_stocks = 0.1
-        self.timestep = 0.
+        self.timestep = 0
         self.ep_len = 390
         self.noise = 10.
         correlated_stocks = np.clip(np.random.normal(loc=self.start_price, scale=self.std, size=(self.num_correlated_stocks)), 1, None)
@@ -46,7 +46,7 @@ class StockMarketEnv(gym.Env):
         self.curr_price = self.start_price
         self.std = 100.
         self.worth_of_stocks = 0.1
-        self.timestep = 0.
+        self.timestep = 0
         self.ep_len = 390
         self.noise = 10.
         correlated_stocks = np.random.normal(loc=self.start_price, scale=self.std, size=(self.num_correlated_stocks))
@@ -59,6 +59,7 @@ class StockMarketEnv(gym.Env):
                             'budgets': np.asarray([100., 100., 100., 100., 100., 1000., 1000., 1000., 1000., 10000.]),
                             'shares_held': np.asarray([500., 500., 500., 500., 500., 500., 500., 500., 500., 500.]),
                           }
+        return self.curr_state, None
 
     def step(self, action: np.array):
         curr_price = self.curr_state['stock_price']
