@@ -7,7 +7,7 @@
 from torch import nn, Tensor
 from typing import Any, Callable, Mapping, Sequence, Optional, Union
 
-from utils import activation_resolver, normalization_resolver
+from src.nn.utils import activation_resolver, normalization_resolver
 
 
 class MLP(nn.Module):
@@ -47,7 +47,7 @@ class MLP(nn.Module):
     """
 
     def __init__(self,
-                 hidden_list: Optional[Union[Sequence[int], int]] = None, 
+                 hidden_list: Optional[Union[Sequence[int], int]] = None,
                  in_feature: Optional[int] = None,
                  hidden_feature: Optional[int] = None,
                  out_feature: Optional[int] = None,
