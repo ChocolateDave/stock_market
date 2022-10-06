@@ -9,6 +9,7 @@ setup(
     packages=[
         "agent",
         "critic",
+        "env",
         "memory",
         "nn",
         "policy",
@@ -17,6 +18,7 @@ setup(
     package_dir={
         "agent": "src/agent",
         "critic": "src/critic",
+        "env": "src/env",
         "memory": "src/memory",
         "nn": "src/nn",
         "policy": "src/policy",
