@@ -7,10 +7,11 @@
 from torch import nn, Tensor
 from typing import Any, Callable, Mapping, Sequence, Optional, Union
 
+from src.nn.base_nn import BaseNN
 from src.nn.utils import activation_resolver, normalization_resolver
 
 
-class MLP(nn.Module):
+class MLP(BaseNN):
     """Multi Layer Perceptron neural network module.
 
     Args:
@@ -19,7 +20,7 @@ class MLP(nn.Module):
         denotes the number of layers of the MLP (default: :obj:`None`).
         in_feature (int, optional): Input feature dimension, will override the
         :attr:`hidden_list` (default: :obj:`None`).
-        hidden_feature (int, optional): Hidden layer dimension, will override
+        hidden_size (int, optional): Hidden layer dimension, will override
         the :attr:`hidden_list` (default: :obj:`None`).
         out_feature (int, optional): Output feature dimension, will override
         the :attr:`hidden_list` (default: :obj:`None`).
@@ -49,7 +50,7 @@ class MLP(nn.Module):
     def __init__(self,
                  hidden_list: Optional[Union[Sequence[int], int]] = None,
                  in_feature: Optional[int] = None,
-                 hidden_feature: Optional[int] = None,
+                 hidden_size: Optional[int] = None,
                  out_feature: Optional[int] = None,
                  num_layers: Optional[int] = None,
                  dropout: Optional[Union[float, Sequence[float]]] = 0.0,
@@ -68,7 +69,7 @@ class MLP(nn.Module):
 
         if in_feature is not None:
             assert num_layers >= 1
-            hidden_list = [hidden_feature] * (num_layers - 1)
+            hidden_list = [hidden_size] * (num_layers - 1)
             hidden_list = [in_feature] + hidden_list + [out_feature]
 
         assert isinstance(hidden_list, Sequence)
@@ -82,7 +83,7 @@ class MLP(nn.Module):
         if len(dropout) != len(hidden_list) - 1:
             raise ValueError(
                 f"Number of dropout probabilities given ({len(dropout)}) does "
-                f"not match the number of layers ({len(hidden_feature) - 1})."
+                f"not match the number of layers ({len(hidden_list) - 1})."
             )
         self.dropout = dropout
 
@@ -91,7 +92,7 @@ class MLP(nn.Module):
         if len(bias) != len(hidden_list) - 1:
             raise ValueError(
                 f"Number of bias booleans given ({len(bias)}) does not match "
-                f"the number of hidden layers ({len(hidden_feature) - 1})."
+                f"the number of hidden layers ({len(hidden_list) - 1})."
             )
 
         self.act = activation_resolver(act, **(act_kwargs or {}))

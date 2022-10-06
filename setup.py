@@ -7,17 +7,19 @@ setup(
     author=["Maverick Zhang maverickzhang@berkeley.edu",
             "Juanwu Lu juanwu_lu@berkeley.edu"],
     packages=[
-        "agents",
-        "infrastructure",
+        "agent",
+        "critic",
+        "memory",
         "nn",
         "policy",
-        "utils"
+        "trainer"
     ],
     package_dir={
-        "agents": "src/agents",
-        "infrastructure": "src/infrastructure",
+        "agent": "src/agent",
+        "critic": "src/critic",
+        "memory": "src/memory",
         "nn": "src/nn",
         "policy": "src/policy",
-        "utils": "src/utils"
+        "trainer": "src/trainer"
     }
 )

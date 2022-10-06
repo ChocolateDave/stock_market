@@ -1,4 +1,6 @@
-from . import MLP
-from .utils import *  # noqa: F403
+from .base_nn import BaseNN
+from .mlp import MLP
+from .utils import network_resolver
 
-__all__ = ["MLP", ".utils.*"]
+
+__all__ = ["BaseNN", "MLP", "network_resolver"]

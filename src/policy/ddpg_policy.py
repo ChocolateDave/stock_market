@@ -9,8 +9,11 @@ import torch as th
 from numpy import ndarray
 from torch import nn, Tensor
 from torch.distributions import Distribution, MultivariateNormal
+from typing import Any, Mapping, Optional, Union
 
-from .base_policy import BasePolicy
+from src.nn.base_nn import BaseNN
+from src.nn.utils import network_resolver
+from src.policy.base_policy import BasePolicy
 
 
 class DDPGPolicy(BasePolicy, nn.Module):
@@ -18,7 +21,8 @@ class DDPGPolicy(BasePolicy, nn.Module):
     def __init__(self,
                  observation_size: int,
                  action_size: int,
-                 policy_net: nn.Module,
+                 policy_net: Optional[Union[str, BaseNN]] = "mlp",
+                 policy_net_kwargs: Optional[Mapping[str, Any]] = None,
                  device: th.device = th.device('cpu'),
                  learning_rate: float = 1e-4,
                  baseline: bool = False,
@@ -27,12 +31,22 @@ class DDPGPolicy(BasePolicy, nn.Module):
 
         self.obs_size = observation_size
         self.act_size = action_size
-        self.policy_net = policy_net.to(device)
+
+        if isinstance(policy_net, BaseNN):
+            self.policy_net = policy_net.to(device)
+        else:
+            self.policy_net = network_resolver(
+                policy_net, **(policy_net_kwargs or {})
+            ).to(device)
+
         self.policy_logstd = nn.Parameter(
-            th.zeros(size=self.act_size, dtype='float', device=device)
+            th.zeros(size=self.act_size, dtype=th.float32, device=device)
         ).to(device)
+
         self.opt = th.optim.Adam(
-            itertools.chain(self.policy_net.parameters(), [self.policy_std]),
+            itertools.chain(
+                self.policy_net.parameters(), [self.policy_logstd]
+            ),
             lr=learning_rate
         )
 
@@ -62,3 +76,20 @@ class DDPGPolicy(BasePolicy, nn.Module):
 class EnsenmbledDDPGPolicy(BasePolicy):
     # TODO (Juanwu): Ensembled DDPG policy
     pass
+
+
+if __name__ == "__main__":
+    # Unit Test Cases
+    # =========================================
+    policy = DDPGPolicy(
+        observation_size=10,
+        action_size=(5,),
+        policy_net="mlp",
+        policy_net_kwargs=dict(
+            in_feature=10,
+            hidden_size=64,
+            out_feature=5,
+            num_layers=2
+        )
+    )
+    print(f"Policy Function: {policy}.")

@@ -4,54 +4,10 @@
 # @date   Oct-2-22
 # =============================================================================
 """Neural network utilities."""
-import inspect
 from torch import Tensor
-from typing import Any, Callable, Mapping, Sequence, Optional, Union
+from typing import Any, Callable, Union
 
-
-# Resolvers
-# https://github.com/pyg-team/pytorch_geometric/blob/master/torch_geometric/nn/resolver.py
-# =========================================
-def _normalize_string(s: str) -> str:
-    return s.lower().replace("-", "").replace("_", "").replace(" ", "")
-
-
-def resolver(classes: Sequence[Any],
-             class_dict: Mapping[str, Any],
-             query: Union[str, Any],
-             base_cls: Optional[Any],
-             base_cls_repr: Optional[str],
-             *args, **kwargs) -> Callable:
-
-    if not isinstance(query, str):
-        return query
-
-    query_repr = _normalize_string(query)
-    if base_cls_repr is None:
-        base_cls_repr = base_cls.__name__ if base_cls else ""
-    base_cls_repr = _normalize_string(base_cls_repr)
-
-    for key_repr, cls in class_dict.items():
-        if query_repr == key_repr:
-            if inspect.isclass(cls):
-                obj = cls(*args, **kwargs)
-                assert callable(obj)
-                return obj
-            assert callable(cls)
-            return cls
-
-    for cls in classes:
-        cls_repr = _normalize_string(cls.__name__)
-        if query_repr in [cls_repr, cls_repr.replace(base_cls_repr, "")]:
-            if inspect.isclass(cls):
-                obj = cls(*args, **kwargs)
-                assert callable(obj)
-                return obj
-            assert callable(cls)
-            return cls
-
-    choices = set(cls.__name__ for cls in classes) | set(class_dict.keys())
-    raise ValueError(f"Failed to resolve '{query:s}' among choices {choices}.")
+from src.utils import resolver
 
 
 # Activation resolver
@@ -78,7 +34,7 @@ def activation_resolver(query: Union[str, Any] = "relu",
 
 # Normalization resolver
 # =========================================
-def normalization_resolver(query: Union[str, Any] = "batch_norm",
+def normalization_resolver(query: Union[str, Any] = "layer_norm",
                            *args, **kwargs) -> Callable:
     import torch
     base_cls = torch.nn.Module
@@ -90,4 +46,22 @@ def normalization_resolver(query: Union[str, Any] = "batch_norm",
     norm_dict = {}
     return resolver(
         norms, norm_dict, query, base_cls, base_cls_repr, *args, **kwargs
+    )
+
+
+# Network Resolver
+# =========================================
+def network_resolver(query: Union[str, Any] = "mlp",
+                     *args, **kwargs) -> Callable:
+    import src.nn
+    base_cls = src.nn.BaseNN
+    base_cls_repr = "NN"
+    networks = [
+        nn for nn in vars(src.nn).values()
+        if isinstance(nn, type) and issubclass(nn, base_cls)
+    ]
+    networks_dict = {}
+    return resolver(
+        networks, networks_dict, query, base_cls,
+        base_cls_repr, *args, **kwargs
     )
