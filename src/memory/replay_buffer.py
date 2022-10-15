@@ -4,17 +4,17 @@
 # @date   Oct-9-22
 # ==============================================================================
 """Vanilla Replay Buffer Module"""
-import numpy as np
+from typing import Sequence
 
-from src.memory.base_buffer import BaseBuffer
+import numpy as np
+from src.memory.base_buffer import BaseBuffer, Path
 from src.memory.utils import add_noise, convert_sequence_of_paths
 
 
 class ReplayBuffer(BaseBuffer):
 
-    def add(self, paths, noised=False) -> None:
-        for path in paths:
-            self.paths.append(path)
+    def add(self, paths: Sequence[Path], noised: bool = False) -> None:
+        self.paths += list(paths)
 
         # Convert a sequence of rollouts
         obs, act, next_obs, r, d = convert_sequence_of_paths(paths)
@@ -40,7 +40,7 @@ class ReplayBuffer(BaseBuffer):
             self.rewards = np.concatenate([self.rewards, r])[-self.max_size:]
             self.dones = np.concatenate([self.dones, d])[-self.max_size:]
 
-    def sample(self, batch_size, random=False):
+    def sample(self, batch_size: int, random=False) -> Sequence[Path]:
         assert (
             self.observations.shape[0] ==
             self.actions.shape[0] ==

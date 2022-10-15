@@ -6,7 +6,8 @@
 """The Base Replay Buffer data structure."""
 from dataclasses import dataclass
 from numpy import ndarray
-from typing import List, Sequence, Tuple
+from typing import List, Sequence, Tuple, Union
+
 
 # Trajectory type
 # =========================================
@@ -20,18 +21,18 @@ class Path:
 
     @property
     def length(self) -> int:
-        return len(self.reward) 
+        return len(self.reward)
 
 
 @dataclass
 class BaseBuffer:
     max_size: int = 100000
     paths: List[Path] = []
-    observations: ndarray = None
-    actions: ndarray = None
-    next_observations: ndarray = None
-    rewards: ndarray = None
-    dones: ndarray = None
+    observations: Union[Sequence[ndarray], ndarray] = None
+    actions: Union[Sequence[ndarray], ndarray] = None
+    next_observations: Union[Sequence[ndarray], ndarray] = None
+    rewards: Union[Sequence[ndarray], ndarray] = None
+    dones: Union[Sequence[ndarray], ndarray] = None
 
     def __len__(self) -> int:
         if self.observations is None:
