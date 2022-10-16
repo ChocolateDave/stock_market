@@ -5,9 +5,11 @@
 # =============================================================================
 """Base reinforcement learning agent module."""
 import os
-from torch import nn
-from typing import Union
+from typing import Optional, Union
 
+from src.critic.base_critic import BaseCritic
+from src.policy.base_policy import BasePolicy
+from torch import Tensor, nn
 
 # Type Alias
 # =========================================
@@ -15,14 +17,25 @@ _PathLike = Union[str, 'os.PathLike[str]']
 
 
 class BaseAgent:
+    critic: BaseCritic
+    policy: BasePolicy
+    training_step: int
+
     def train_one_step(self) -> None:
         raise NotImplementedError
 
-    def add_to_replay_buffer(self) -> None:
-        return None
+    def update_policy(self,
+                      obs: Optional[Tensor] = None,
+                      action: Optional[Tensor] = None) -> None:
+        raise NotImplementedError
 
-    def sample(self) -> None:
-        return None
+    def update_critic(self,
+                      obs: Tensor,
+                      action: Tensor,
+                      next_obs: Tensor,
+                      rewards: Tensor,
+                      dones: Tensor) -> None:
+        raise NotImplementedError
 
     def save(self, filepath: _PathLike) -> None:
         pass

@@ -4,10 +4,11 @@
 # @date   Oct-2-22
 # =============================================================================
 """Neural network utilities."""
-from torch import Tensor
 from typing import Any, Callable, Union
 
+from src.nn.base_nn import BaseNN
 from src.utils import resolver
+from torch import Tensor, distributed
 
 
 # Activation resolver
@@ -65,3 +66,14 @@ def network_resolver(query: Union[str, Any] = "mlp",
         networks, networks_dict, query, base_cls,
         base_cls_repr, *args, **kwargs
     )
+
+
+# Gradient averaging function
+# https://github.com/seba-1511/dist_tuto.pth/blob/gh-pages/train_dist.py
+# =============================================================================
+def average_gradients(model: BaseNN) -> None:
+    size = float(distributed.get_world_size())
+    for param in model.parameters():
+        distributed.all_reduce(
+            param.grad.data, op=distributed.reduce_op.SUM, group=0)
+        param.grad.data /= size

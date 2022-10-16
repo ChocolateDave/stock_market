@@ -5,15 +5,15 @@
 # =============================================================================
 """Deep Deterministic Policy module."""
 import itertools
-import torch as th
-from numpy import ndarray
-from torch import nn, Tensor
-from torch.distributions import Distribution, MultivariateNormal
 from typing import Any, Mapping, Optional, Union
 
+import torch as th
+from numpy import ndarray
 from src.nn.base_nn import BaseNN
 from src.nn.utils import network_resolver
 from src.policy.base_policy import BasePolicy
+from torch import Tensor, nn
+from torch.distributions import Distribution, MultivariateNormal
 
 
 class DDPGPolicy(BasePolicy, nn.Module):
@@ -25,7 +25,6 @@ class DDPGPolicy(BasePolicy, nn.Module):
                  policy_net_kwargs: Optional[Mapping[str, Any]] = None,
                  device: th.device = th.device('cpu'),
                  learning_rate: float = 1e-4,
-                 baseline: bool = False,
                  **kwargs) -> None:
         super().__init__()
 
@@ -45,13 +44,12 @@ class DDPGPolicy(BasePolicy, nn.Module):
 
         self.opt = th.optim.Adam(
             itertools.chain(
-                self.policy_net.parameters(), [self.policy_logstd]
-            ),
+                self.policy_net.parameters(), [self.policy_logstd]),
             lr=learning_rate
         )
 
     def forward(self, obs: Tensor) -> Distribution:
-        batch_loc = self.policy_net(obs)
+        batch_loc = self.policy_net.forward(obs)
         scale_tril = th.diag(th.exp(self.policy_logstd))
         batch_scale_tril = scale_tril.repeat(batch_loc.shape[0], 1, 1)
         action_dist = MultivariateNormal(
@@ -68,9 +66,6 @@ class DDPGPolicy(BasePolicy, nn.Module):
             actions = distribution.sample().cpu().numpy()
 
         return actions
-
-    def update(self) -> None:
-        pass
 
 
 class EnsenmbledDDPGPolicy(BasePolicy):

@@ -6,7 +6,7 @@
 """Base Reinforcement Learning trainer class."""
 from typing import Any, Optional, Sequence, Union
 
-from src.agents.base_agent import BaseAgent
+from src.agent.base_agent import BaseAgent
 
 
 class Trainer:
@@ -25,8 +25,12 @@ class Trainer:
         pass
 
     def train(self, execution: bool = False) -> Any:
-        self._train()
+        self.set_train()
 
-    def _train(self) -> None:
+    def set_train(self) -> None:
         for agent in self.agents:
             agent.train()
+
+    def set_eval(self) -> None:
+        for agent in self.agents:
+            agent.eval()

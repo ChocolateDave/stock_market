@@ -122,6 +122,14 @@ class MLP(BaseNN):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({str(self.hidden_list)[1:-1]})"
 
+    @property
+    def in_feature(self) -> int:
+        return self.hidden_list[0]
+
+    @property
+    def out_feature(self) -> int:
+        return self.hidden_list[-1]
+
     def forward(self, x: Tensor) -> Tensor:
         x = x.float()
 
@@ -153,14 +161,6 @@ class MLP(BaseNN):
         for norm in self.norms:
             if hasattr(norm, "reset_parameters"):
                 norm.reset_parameters()
-
-    @property
-    def in_feature(self) -> int:
-        return self.hidden_list[0]
-
-    @property
-    def out_feature(self) -> int:
-        return self.hidden_list[-1]
 
 
 if __name__ == "__main__":

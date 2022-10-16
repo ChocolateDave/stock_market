@@ -4,21 +4,22 @@
 # @date   Oct-2-22
 # =============================================================================
 """Deep Deterministic Policy Gradient agent module."""
-import gym
-import torch as th
-from copy import deepcopy
-from torch import optim
-from typing import Any, Mapping, Optional, Union
+from typing import Any, Mapping, Optional, Tuple, Union
 
-from src.agents.base_agent import BaseAgent
-from src.nn import BaseNN, network_resolver
+import torch as th
+from src.agent.base_agent import BaseAgent
+from src.critic.ddpg_critic import DDPGCritic
+from src.nn import BaseNN
+from src.policy.ddpg_policy import DDPGPolicy
+from torch import Tensor, optim
 
 
 class DDPGAgent(BaseAgent):
 
     def __init__(
         self,
-        env: gym.Env,
+        observation_size: int,
+        action_size: int,
         device: Optional[th.device] = None,
         policy_net: Optional[Union[str, BaseNN]] = "mlp",
         policy_net_kwargs: Optional[Mapping[str, Any]] = None,
@@ -27,48 +28,45 @@ class DDPGAgent(BaseAgent):
         lr: Optional[float] = 1e-4,
         policy_lr: Optional[float] = None,
         critic_lr: Optional[float] = None,
-        soft_update: bool = False,
-        soft_tau: Optional[float] = 0.9,
+        discount: Optional[float] = 0.99,
+        grad_clip: Optional[Tuple[float, float]] = None,
+        soft_update_tau: Optional[float] = 0.9,
         **kwargs
     ) -> None:
+        super().__init__()
 
-        self.env = env
-
-        if isinstance(policy_net, BaseNN):
-            self.online_policy = policy_net.to(device)
-        else:
-            self.online_policy = network_resolver(
-                policy_net, **(policy_net_kwargs or {})
-            )
-        self.target_policy = deepcopy(self.online_policy).to(device)
+        self.policy = DDPGPolicy(
+            observation_size,
+            action_size,
+            policy_net,
+            policy_net_kwargs,
+            device,
+            policy_lr or lr,
+        )
         self.policy_opt = optim.Adam(
-            self.online_policy.parameters(),
+            self.policy.policy_net.parameters(),
             lr=policy_lr if policy_lr else lr
         )
 
-        if isinstance(critic_net, BaseNN):
-            self.online_critic = critic_net.to(device)
-        else:
-            self.online_critic = network_resolver(
-                critic_net, **(critic_net_kwargs or {})
-            )
-        self.target_critic = deepcopy(self.online_critic).to(device)
-        self.critic_opt = optim.Adam(
-            self.online_critic.parameters(),
-            lr=critic_lr if critic_lr else lr
+        self.critic = DDPGCritic(
+            observation_size,
+            action_size,
+            critic_net,
+            critic_net_kwargs,
+            device,
+            discount,
+            critic_lr,
+            soft_update_tau,
+            grad_clip
         )
 
-        self.soft_update = soft_update
-        self.soft_tau = soft_tau
+        self.training_step = 0
 
     def train_one_step(self) -> None:
         return super().train_one_step()
 
-    def add_to_replay_buffer(self) -> None:
-        return super().add_to_replay_buffer()
-
-    def sample(self) -> None:
-        return super().sample()
-
     def save(self, filepath) -> None:
         return super().save(filepath)
+
+    def _calc_bellman_target(self) -> Tensor:
+        pass
