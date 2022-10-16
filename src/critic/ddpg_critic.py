@@ -11,7 +11,7 @@ import torch as th
 from src.critic.base_critic import BaseCritic
 from src.nn.base_nn import BaseNN
 from src.nn.utils import network_resolver
-from torch import Tensor
+from torch import Tensor, optim
 
 
 class DDPGCritic(BaseCritic):
@@ -27,7 +27,8 @@ class DDPGCritic(BaseCritic):
                  discount: float = 0.99,
                  learning_rate: float = 1e-4,
                  soft_update_tau: Optional[float] = None,
-                 grad_clip: Optional[float] = None) -> None:
+                 grad_clip: Optional[float] = None,
+                 optimizer_kwargs: Optional[Mapping[str, Any]] = None) -> None:
         super().__init__()
 
         self.obs_size = observation_size
@@ -53,11 +54,14 @@ class DDPGCritic(BaseCritic):
             # Enforce input/ouput feature
             critic_net_kwargs["in_feature"] = observation_size + action_size
             critic_net_kwargs["out_feature"] = 1
-
             self.q_net = network_resolver(
                 critic_net, **(critic_net_kwargs or {})
             ).to(device)
         self.target_q_net = deepcopy(self.q_net).to(device)
+
+        self.optimizer = optim.Adam(self.q_net.parameters(),
+                                    lr=self.learning_rate,
+                                    **(optimizer_kwargs or {}))
 
     def forward(self, obs: Tensor, action: Optional[Tensor]) -> Tensor:
         inputs = th.cat((obs, action), dim=-1)

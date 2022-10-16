@@ -27,7 +27,7 @@ class Path:
 @dataclass
 class BaseBuffer:
     max_size: int = 100000
-    paths: List[Path] = []
+    paths: List[Path] = None
     observations: Union[Sequence[ndarray], ndarray] = None
     actions: Union[Sequence[ndarray], ndarray] = None
     next_observations: Union[Sequence[ndarray], ndarray] = None

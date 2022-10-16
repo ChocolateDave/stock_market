@@ -16,23 +16,21 @@ from torch import Tensor, optim
 
 class DDPGAgent(BaseAgent):
 
-    def __init__(
-        self,
-        observation_size: int,
-        action_size: int,
-        device: Optional[th.device] = None,
-        policy_net: Optional[Union[str, BaseNN]] = "mlp",
-        policy_net_kwargs: Optional[Mapping[str, Any]] = None,
-        critic_net: Optional[Union[str, BaseNN]] = "mlp",
-        critic_net_kwargs: Optional[Mapping[str, Any]] = None,
-        lr: Optional[float] = 1e-4,
-        policy_lr: Optional[float] = None,
-        critic_lr: Optional[float] = None,
-        discount: Optional[float] = 0.99,
-        grad_clip: Optional[Tuple[float, float]] = None,
-        soft_update_tau: Optional[float] = 0.9,
-        **kwargs
-    ) -> None:
+    def __init__(self,
+                 observation_size: int,
+                 action_size: int,
+                 device: Optional[th.device] = None,
+                 policy_net: Optional[Union[str, BaseNN]] = "mlp",
+                 policy_net_kwargs: Optional[Mapping[str, Any]] = None,
+                 critic_net: Optional[Union[str, BaseNN]] = "mlp",
+                 critic_net_kwargs: Optional[Mapping[str, Any]] = None,
+                 lr: Optional[float] = 1e-4,
+                 policy_lr: Optional[float] = None,
+                 critic_lr: Optional[float] = None,
+                 discount: Optional[float] = 0.99,
+                 grad_clip: Optional[Tuple[float, float]] = None,
+                 soft_update_tau: Optional[float] = 0.9,
+                 **kwargs) -> None:
         super().__init__()
 
         self.policy = DDPGPolicy(
