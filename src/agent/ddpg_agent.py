@@ -10,8 +10,11 @@ import torch as th
 from src.agent.base_agent import BaseAgent
 from src.critic.ddpg_critic import DDPGCritic
 from src.nn import BaseNN
+from src.nn.utils import from_numpy, to_numpy
 from src.policy.ddpg_policy import DDPGPolicy
-from torch import Tensor, optim
+from src.memory.replay_buffer import ReplayBuffer
+from src.memory.utils import convert_sequence_of_paths
+from torch import Tensor, optim, nn
 
 
 class DDPGAgent(BaseAgent):
@@ -30,6 +33,7 @@ class DDPGAgent(BaseAgent):
                  discount: Optional[float] = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
                  soft_update_tau: Optional[float] = 0.9,
+                 batch_size: Optional[int] = 1000,
                  **kwargs) -> None:
         super().__init__()
 
@@ -40,6 +44,7 @@ class DDPGAgent(BaseAgent):
             policy_net_kwargs,
             device,
             policy_lr or lr,
+            soft_update_tau,
         )
         self.policy_opt = optim.Adam(
             self.policy.policy_net.parameters(),
@@ -58,13 +63,51 @@ class DDPGAgent(BaseAgent):
             grad_clip
         )
 
+        self.replay_buffer = ReplayBuffer(max_size=100000)
+
         self.training_step = 0
 
     def train_one_step(self) -> None:
-        return super().train_one_step()
+        samples = self.replay_buffer.sample(batch_size = self.batch_size, random = True)
+        states, actions, next_states, rewards, dones = convert_sequence_of_paths(samples)
+        states = from_numpy(states)
+        actions = from_numpy(actions)
+        rewards = from_numpy(rewards)
+        next_states = from_numpy(next_states)
+        dones = from_numpy(dones)
+
+        self.update_critic(states, actions, next_states, rewards, dones)
+        self.update_policy(obs=states)
+        self.sync(non_blocking=True) # I'm not sure what boolean needs to go in here?
 
     def save(self, filepath) -> None:
         return super().save(filepath)
 
+    # I'm not using it, but if you want you can modify update_critic to use this one
     def _calc_bellman_target(self) -> Tensor:
         pass
+
+    def update_critic(self, obs: Tensor, action: Tensor, next_obs: Tensor, rewards: Tensor, dones: Tensor) -> None:
+        with th.no_grad():
+            next_action = self.policy.get_target_action(next_obs)
+            targets = rewards + self.critic.discount * (1. - dones) * self.critic.target_forward(obs, next_action)
+        Q_vals = self.critic.forward(obs, action)
+        critic_loss = self.critic.loss(Q_vals, targets)
+
+        self.critic.optimizer.zero_grad()
+        critic_loss.backward()
+        self.critic.optimizer.step()
+
+    def update_policy(self, obs: Optional[Tensor] = None, action: Optional[Tensor] = None) -> None:
+        policy_action = self.policy.get_action(obs, explore=False)
+        policy_loss = self.critic.forward(obs, policy_action).mean()
+
+        self.policy.optimizer.zero_grad()
+        policy_loss.backward()
+        self.policy.optimizer.step()
+
+    # Updates target critic and policy networks
+    def sync(self, non_blocking: bool = False) -> None:
+        self.policy.sync(non_blocking)
+        self.critic.sync(non_blocking)
+
