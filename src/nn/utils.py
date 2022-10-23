@@ -8,6 +8,7 @@ from typing import Any, Callable, Union
 
 from src.nn.base_nn import BaseNN
 from src.utils import resolver
+import torch
 from torch import Tensor, distributed
 
 
@@ -77,3 +78,11 @@ def average_gradients(model: BaseNN) -> None:
         distributed.all_reduce(
             param.grad.data, op=distributed.reduce_op.SUM, group=0)
         param.grad.data /= size
+
+device = None
+
+def from_numpy(*args, **kwargs):
+    return torch.from_numpy(*args, **kwargs).float().to(device)
+
+def to_numpy(tensor):
+    return tensor.to('cpu').detach().numpy()

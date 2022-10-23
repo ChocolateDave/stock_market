@@ -4,6 +4,7 @@
 # @date   Oct-2-22
 # =============================================================================
 """Deep Deterministic Policy module."""
+from copy import deepcopy
 from typing import Any, Mapping, Optional, Union
 
 import torch as th
@@ -51,6 +52,8 @@ class OUNoise(nn.Module):
 
 
 class DDPGPolicy(BasePolicy, nn.Module):
+    policy_net: BaseNN
+    target_policy_net: BaseNN
 
     def __init__(self,
                  observation_size: int,
@@ -60,12 +63,14 @@ class DDPGPolicy(BasePolicy, nn.Module):
                  policy_net_kwargs: Optional[Mapping[str, Any]] = None,
                  device: th.device = th.device('cpu'),
                  learning_rate: float = 1e-4,
+                 soft_update_tau: Optional[float] = None,
                  optimizer_kwargs: Optional[Mapping[str, Any]] = None,
                  **kwargs) -> None:
         super().__init__()
 
         self.obs_size = observation_size
         self.act_size = action_size
+        self.soft_update_tau = soft_update_tau
 
         if isinstance(policy_net, BaseNN):
             assert policy_net.in_feature == observation_size and \
@@ -83,6 +88,7 @@ class DDPGPolicy(BasePolicy, nn.Module):
             self.policy_net = network_resolver(
                 policy_net, **(policy_net_kwargs or {})
             ).to(device)
+        self.target_policy_net = deepcopy(self.policy_net).to(device)
 
         self.optimizer = th.optim.Adam(self.policy_net.parameters(),
                                        lr=learning_rate,
@@ -124,6 +130,20 @@ class DDPGPolicy(BasePolicy, nn.Module):
 
         return actions.cpu().numpy()
 
+    def get_target_action(self, obs: Tensor) -> ndarray:
+        if len(obs.shape) == 1:
+            obs = obs.unsqueeze(0)
+
+        actions: Tensor = self.target_policy_net(obs).detach()  # not in comp. graph
+        if self.discrete_action:
+            # Generate one-hot encoding of the max-policy actions
+            # ===================================================
+            actions = (actions == actions.max(1, keepdim=True)[0]).float()
+        else:
+            actions.clamp(-1, 1)
+
+        return actions.cpu().numpy()
+
     def reset_noise(self) -> None:
         if not self.discrete_action:
             self.exploration.reset()
@@ -133,6 +153,19 @@ class DDPGPolicy(BasePolicy, nn.Module):
             self.exploration = scale
         else:
             self.exploration.scale = scale
+
+    def sync(self, non_blocking: bool = False) -> None:
+        if self.soft_update_tau is None:
+            # Hard update
+            with th.no_grad():
+                for param, target_param in zip(
+                    self.policy_net.parameters(),
+                    self.target_policy_net.parameters()
+                ):
+                    target_param.data.copy_(param.data)
+        else:
+            self.target_policy_net.soft_update(
+                self.policy_net, self.soft_update_tau, non_blocking)
 
 
 class EnsenmbledDDPGPolicy(BasePolicy):

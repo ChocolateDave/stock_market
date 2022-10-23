@@ -11,7 +11,7 @@ import torch as th
 from src.critic.base_critic import BaseCritic
 from src.nn.base_nn import BaseNN
 from src.nn.utils import network_resolver
-from torch import Tensor, optim
+from torch import Tensor, optim, nn
 
 
 class DDPGCritic(BaseCritic):
@@ -37,6 +37,7 @@ class DDPGCritic(BaseCritic):
         self.learning_rate = learning_rate
         self.soft_update_tau = soft_update_tau
         self.grad_clip = grad_clip
+        self.loss = nn.MSELoss()
 
         if isinstance(critic_net, BaseNN):
             assert critic_net.in_feature == observation_size + action_size, \
@@ -66,6 +67,10 @@ class DDPGCritic(BaseCritic):
     def forward(self, obs: Tensor, action: Optional[Tensor]) -> Tensor:
         inputs = th.cat((obs, action), dim=-1)
         return self.q_net.forward(inputs)
+
+    def target_forward(self, obs: Tensor, action: Optional[Tensor]) -> Tensor:
+        inputs = th.cat((obs, action), dim=-1)
+        return self.target_q_net.forward(inputs)
 
     def sync(self, non_blocking: bool = False) -> None:
         if self.soft_update_tau is None:
