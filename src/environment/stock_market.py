@@ -10,6 +10,9 @@ import numpy as np
 # TODO (Maverick): HMM
 
 
+class ActionWRapper
+
+
 class StockMarketEnv(gym.Env):
     """Multi-agent Single-stock Trading Scenario.
 
