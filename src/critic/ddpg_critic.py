@@ -1,6 +1,6 @@
 # =============================================================================
 # @file   ddpg_critic.py
-# @author Juanwu Lu
+# @author Maverick Zhang, Juanwu Lu
 # @date   Oct-9-22
 # =============================================================================
 """Deep Deterministic Policy Gradient Q-function module"""

@@ -3,6 +3,10 @@
 # @author Maverick Zhang
 # @date   Sep-25-22
 # =============================================================================
+from __future__ import annotations
+
+from typing import Any, Tuple
+
 import gym
 import numpy as np
 
@@ -10,7 +14,13 @@ import numpy as np
 # TODO (Maverick): HMM
 
 
-class ActionWRapper
+class LogarithmActionWrapper(gym.ActionWrapper):
+
+    def __init__(self, env: gym.Env) -> None:
+        super().__init__(env=env)
+
+    def action(self, act: Any) -> float:
+        return np.log(act)
 
 
 class StockMarketEnv(gym.Env):
@@ -92,7 +102,10 @@ class StockMarketEnv(gym.Env):
         self.noise = 10.
         self.budget_discount = 0.9
         correlated_stocks = np.clip(np.random.normal(
-            loc=self.start_price, scale=self.std, size=(self.num_correlated_stocks)), 1, None)
+            loc=self.start_price,
+            scale=self.std,
+            size=(self.num_correlated_stocks)
+        ), 1, None)
         uncorrelated_stocks = np.clip(np.random.normal(
             loc=self.start_price, scale=self.std, size=(self.num_uncorrelated_stocks)), 1, None)
         total_stocks = 1 + self.num_correlated_stocks + self.num_uncorrelated_stocks
@@ -113,7 +126,7 @@ class StockMarketEnv(gym.Env):
         }
         return self.curr_state, None
 
-    def step(self, action: np.ndarray):
+    def step(self, action: np.ndarray) -> Tuple:
         proposed_prices = 1. + np.exp(action[:, 0])
         proposed_shares = action[:, 1]
         potential_budgets = self.curr_state['budgets'] + \
@@ -128,8 +141,10 @@ class StockMarketEnv(gym.Env):
             np.copy(action), self.curr_state['stock_price'])
         self.curr_state['stock_price'] = np.clip(close, 0, None)
         diff = close - curr_price
-        diffs = diff / curr_price * self.curr_state['correlated_stocks'] + np.random.normal(
-            loc=0, scale=self.noise * volatility, size=(self.num_correlated_stocks))
+        diffs = diff / curr_price * self.curr_state['correlated_stocks'] + \
+            np.random.normal(loc=0,
+                             scale=self.noise * volatility,
+                             size=(self.num_correlated_stocks))
         self.curr_state['correlated_stocks'] += diffs
         self.curr_state['correlated_stocks'] = np.clip(
             self.curr_state['correlated_stocks'], 1, None)
@@ -160,7 +175,8 @@ class StockMarketEnv(gym.Env):
     # TODO: Cleanup
     def clear(self, action: np.ndarray, close):
         volatility = 1.
-        # the standard deviation of share_prices will determine correlated stock standard deviation
+        # the standard deviation of share_prices will determine
+        # correlated stock standard deviation
         share_prices = []
         n, _ = action.shape
         bidders = action[action[:, 1] > 0, :]

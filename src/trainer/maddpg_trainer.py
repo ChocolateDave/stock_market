@@ -7,7 +7,7 @@
 from typing import Any, Sequence
 
 from src.agent.base_agent import BaseAgent
-from src.memory.muti_agent_replay_buffer import MultiAgentReplayBuffer
+from src.memory.multi_agent_replay_buffer import MultiAgentReplayBuffer
 from src.trainer.base_trainer import Trainer
 
 
@@ -18,6 +18,7 @@ class MADDPGTrainer(Trainer):
                  max_size: int = 10000) -> None:
         super().__init__()
 
+        self.agents = agents
         self.replay_buffer = MultiAgentReplayBuffer(max_size=max_size)
 
     def train_one_epoch(self, epoch: int) -> Any:
