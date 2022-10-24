@@ -15,13 +15,11 @@ from torch import Tensor, nn
 
 
 class DDPGCritic(BaseCritic):
-    q_net: BaseNN
-    target_q_net: BaseNN
 
     def __init__(self,
                  observation_size: int,
                  action_size: int,
-                 critic_net: Optional[Union[str, BaseNN]] = "mlp",
+                 critic_net: Optional[Union[str, BaseNN]] = 'MLP',
                  critic_net_kwargs: Optional[Mapping[str, Any]] = None,
                  device: th.device = th.device('cpu'),
                  discount: float = 0.99,
@@ -50,42 +48,46 @@ class DDPGCritic(BaseCritic):
                 "Expect the Q-function to output a real value, "
                 f"but got an output size of {critic_net.out_feature:d}."
             )
-            self.q_net = critic_net.to(device)
+            self.critic_net = critic_net.to(device)
         else:
             # Enforce input/ouput feature
             critic_net_kwargs["in_feature"] = observation_size + action_size
             critic_net_kwargs["out_feature"] = 1
-            self.q_net = network_resolver(
+            self.critic_net = network_resolver(
                 critic_net, **critic_net_kwargs
             ).to(device)
-        self.target_q_net = deepcopy(self.q_net).to(device)
+        self.target_critic_net = deepcopy(self.critic_net).to(device)
 
-    def forward(self, obs: Tensor, action: Optional[Tensor]) -> Tensor:
+    def forward(self,
+                obs: Tensor,
+                action: Optional[Tensor] = None,
+                target: bool = False) -> Tensor:
+        if action is None:
+            raise RuntimeError('DDPG state-action function requires actions.')
+
         if action.dim() == 1:
-            action = action.unsqueeze(-1)
+            action = action.unsqueeze(1)
 
         inputs = th.cat((obs, action), dim=-1)
-        return self.q_net.forward(inputs)
 
-    def target_forward(self, obs: Tensor, action: Optional[Tensor]) -> Tensor:
-        if action.dim() == 1:
-            action = action.unsqueeze(-1)
-
-        inputs = th.cat((obs, action), dim=-1)
-        return self.target_q_net.forward(inputs)
+        if target:
+            return self.target_critic_net.forward(inputs)
+        else:
+            return self.critic_net.forward(inputs)
 
     def sync(self, non_blocking: bool = False) -> None:
         if self.soft_update_tau is None:
             # Hard update
             with th.no_grad():
                 for param, target_param in zip(
-                    self.q_net.parameters(),
-                    self.target_q_net.parameters()
+                    self.critic_net.parameters(),
+                    self.target_critic_net.parameters()
                 ):
                     target_param.data.copy_(param.data)
         else:
-            self.target_q_net.soft_update(
-                self.q_net, self.soft_update_tau, non_blocking)
+            self.target_critic_net.soft_update(self.critic_net,
+                                               self.soft_update_tau,
+                                               non_blocking)
 
 
 if __name__ == "__main__":

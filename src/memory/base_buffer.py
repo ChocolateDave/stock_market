@@ -5,12 +5,13 @@
 # =============================================================================
 """The Base Replay Buffer data structure."""
 from dataclasses import dataclass, field
+from typing import List, Mapping, Sequence, Tuple, Union
+
+import numpy as np
 from numpy import ndarray
-from typing import List, Sequence, Tuple, Union
 
 
 # Trajectory type
-# =========================================
 @dataclass
 class Path:
     observation: ndarray = None
@@ -40,8 +41,32 @@ class BaseBuffer:
         else:
             return self.observations.shape[0]
 
-    def add(self, paths: Sequence[Path], noised: bool = False) -> None:
+    def add_paths(self, paths: Sequence[Path], noised: bool = False) -> None:
         raise NotImplementedError
+
+    def add_transition(self,
+                       ob: ndarray,
+                       ac: ndarray,
+                       next_ob: ndarray,
+                       rew: ndarray,
+                       done: ndarray,
+                       noised: bool = False) -> None:
+
+        path = Path(observation=np.asarray([ob], dtype='float32'),
+                    action=np.asarray([ac], dtype='float32'),
+                    next_observation=np.asarray([next_ob], dtype='float32'),
+                    reward=np.asarray([rew], dtype='float32'),
+                    done=np.asarray([done], dtype='int64'))
+        self.add_paths([path], noised=noised)
 
     def sample(self, batch_size: int, random: bool = False) -> Tuple:
         raise NotImplementedError
+
+
+@dataclass
+class MultiBuffer:
+    buffers: Mapping[str, BaseBuffer] = field(default_factory=lambda: [])
+
+    def __len__(self) -> int:
+        for _, buffer in self.buffer.items():
+            return len(buffer)

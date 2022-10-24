@@ -4,18 +4,20 @@
 # @date   Oct-2-22
 # =============================================================================
 """Deep Deterministic Policy module."""
+from __future__ import annotations
+
 from copy import deepcopy
 from typing import Any, Mapping, Optional, Union
 
 import torch as th
-from numpy import ndarray
 from src.nn.base_nn import BaseNN
 from src.nn.utils import network_resolver
 from src.policy.base_policy import BasePolicy
 from torch import Tensor, nn
+from torch.distributions import Distribution
 
 
-# OUNoise for continous random exploration
+# Ornstein-Uhlenbeck Noise for continous random exploration
 # https://github.com/songrotek/DDPG/blob/master/ou_noise.py
 # =========================================================
 class OUNoise(nn.Module):
@@ -52,8 +54,6 @@ class OUNoise(nn.Module):
 
 
 class DDPGPolicy(BasePolicy, nn.Module):
-    policy_net: BaseNN
-    target_policy_net: BaseNN
 
     def __init__(self,
                  observation_size: int,
@@ -103,31 +103,29 @@ class DDPGPolicy(BasePolicy, nn.Module):
         else:
             self.exploration = OUNoise(action_size)
 
-    def forward(self, obs: Tensor) -> Tensor:
-        if len(obs.shape) == 1:
-            obs = obs.unsqueeze(0)
-
-        return self.policy_net.forward(obs)
-
-    def get_action(self,
-                   obs: Tensor,
-                   explore: bool = True,
-                   target: bool = False) -> ndarray:
+    def forward(self, obs: Tensor, target: bool = False) -> Distribution:
         if len(obs.shape) == 1:
             obs = obs.unsqueeze(0)
 
         if target:
-            actions: Tensor = self.policy_net(obs)
+            return self.target_policy_net.forward(obs)
         else:
-            actions: Tensor = self.policy_net(obs)
+            return self.policy_net.forward(obs)
+
+    def get_action(self,
+                   obs: Tensor,
+                   explore: bool = True,
+                   target: bool = False) -> Tensor:
+        actions: Tensor = self.forward(obs, target)
 
         if self.discrete_action:
+            actions = nn.functional.softmax(actions, dim=-1)
             if explore:
                 # Random sample from discrete action space with gumbel noise
                 actions = nn.functional.gumbel_softmax(actions, hard=True)
             else:
-                # Generate one-hot encoding of the max-policy actions
                 actions = (actions == actions.max(1, keepdim=True)[0]).float()
+
         else:
             if explore:
                 # Explore continous action space with OUNoise

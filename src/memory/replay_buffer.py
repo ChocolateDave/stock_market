@@ -4,6 +4,8 @@
 # @date   Oct-9-22
 # =============================================================================
 """Vanilla Replay Buffer Module"""
+from __future__ import annotations
+
 from typing import Sequence
 
 import numpy as np
@@ -13,7 +15,7 @@ from src.memory.utils import add_noise, convert_sequence_of_paths
 
 class ReplayBuffer(BaseBuffer):
 
-    def add(self, paths: Sequence[Path], noised: bool = False) -> None:
+    def add_paths(self, paths: Sequence[Path], noised: bool = False) -> None:
         self.paths += list(paths)
 
         # Convert a sequence of rollouts

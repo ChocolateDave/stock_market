@@ -6,6 +6,7 @@
 """Trainer Class for Deep Deterministic Policy Gradient"""
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any, Mapping, Optional, Tuple, Union
 
 import torch as th
@@ -25,7 +26,7 @@ class DDPGTrainer(BaseTrainer):
                  batch_size: int = 64,
                  device: th.device = th.device('cpu'),
                  log_dir: str = 'logs/',
-                 num_epochs: int = 20000,
+                 num_episodes: int = 20000,
                  name: str = '',
                  policy_net: Optional[Union[str, BaseNN]] = 'MLP',
                  policy_net_kwargs: Optional[Mapping[str, Any]] = None,
@@ -37,41 +38,92 @@ class DDPGTrainer(BaseTrainer):
                  discount: Optional[float] = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
                  soft_update_tau: Optional[float] = 0.9) -> None:
-        super().__init__(log_dir, num_epochs, name)
+        super().__init__(log_dir, num_episodes, name)
 
         # Retreive observation and action size
-        if isinstance(env.observation_space, Discrete):
-            observation_size = 1
+        if len(env.observation_space.shape) > 2:
+            observation_size = env.observation_space
         else:
             observation_size = env.observation_space.shape[0]
         if isinstance(env.action_space, Discrete):
-            action_size = 1
+            action_size = env.action_space.n
+            self.discrete_action = True
         else:
             action_size = env.action_space.shape[0]
+            self.discrete_action = False
 
-        self.agents = DDPGAgent(observation_size=observation_size,
-                                action_size=action_size,
-                                device=device,
-                                policy_net=policy_net,
-                                policy_net_kwargs=policy_net_kwargs,
-                                policy_lr=policy_lr,
-                                critic_net=critic_net,
-                                critic_net_kwargs=critic_net_kwargs,
-                                learning_rate=learning_rate,
-                                critic_lr=critic_lr,
-                                discount=discount,
-                                grad_clip=grad_clip,
-                                soft_update_tau=soft_update_tau)
-        self.buffer = ReplayBuffer(max_size=buffer_size)
+        self.agent: DDPGAgent = DDPGAgent(observation_size=observation_size,
+                                          action_size=action_size,
+                                          discrete_action=self.discrete_action,
+                                          device=device,
+                                          policy_net=policy_net,
+                                          policy_net_kwargs=policy_net_kwargs,
+                                          policy_lr=policy_lr,
+                                          critic_net=critic_net,
+                                          critic_net_kwargs=critic_net_kwargs,
+                                          learning_rate=learning_rate,
+                                          critic_lr=critic_lr,
+                                          discount=discount,
+                                          grad_clip=grad_clip,
+                                          soft_update_tau=soft_update_tau)
         self.batch_size = batch_size
+        self.buffer = ReplayBuffer(max_size=buffer_size)
         self.env = env
 
-    def train_one_epoch(self, epoch: int) -> Any:
-        # Main training loop
-        obs, acs, next_obs, rews, dones = self.buffer.sample(self.batch_size)
-        log = self.agents.train_one_step(obs, acs, next_obs, rews, dones)
+    def train_one_episode(self, epoch: int) -> Any:
+        log = defaultdict(list)
 
-        return log
+        # Initialize random process
+        self.agent.reset_noise()
+
+        # Receive the initial state
+        steps: int = 0
+        ob = self.env.reset()  # TODO: seeding?
+
+        while True:
+            with th.no_grad():
+                ac = self.agent.get_action(ob, explore=True, target=False)
+                if self.discrete_action:
+                    # convert one-hot to integer
+                    ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
+                else:
+                    ac_loc = ac.float().cpu().numpy()
+                next_ob, rew, done, _, _ = self.env.step(ac_loc[0])
+                self.buffer.add_transition(
+                    ob, ac.cpu().numpy()[0], next_ob, rew, done)
+                log['episode_returns'].append(rew)
+                steps += 1
+
+            if len(self.buffer) > self.batch_size:
+                obs, acs, next_obs, rews, dones = self.buffer.sample(
+                    self.batch_size
+                )
+                obs = th.from_numpy(obs).to(self.agent.device)
+                acs = th.from_numpy(acs).to(self.agent.device)
+                next_obs = th.from_numpy(next_obs).to(self.agent.device)
+                rews = th.from_numpy(rews).to(self.agent.device)
+                dones = th.from_numpy(dones).to(self.agent.device)
+
+                # Update critic network
+                critic_loss = self.agent.update_critic(
+                    obs, acs, next_obs, rews, dones)
+                log['critic_loss'].append(critic_loss)
+
+                # Update policy network
+                policy_loss = self.agent.update_policy(obs)
+                log['policy_loss'].append(policy_loss)
+
+                # Update target networks
+                self.agent.update_target()
+
+            if self.max_episode_steps:
+                done = steps > self.max_episode_steps or done
+
+            if done:
+                return {key: sum(value)
+                        if key == 'episode_returns'
+                        else sum(value) / steps
+                        for key, value in log.items()}
 
     def exec_one_epoch(self, epoch: int = -1) -> Any:
         raise NotImplementedError

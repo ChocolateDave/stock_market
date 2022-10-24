@@ -30,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--gpu-id', nargs='+', type=int, default=0,
                         help='GPU devices to train on.')
     parser.add_argument('-b', '--batch-size', type=int, help='Batch Size.')
-    parser.add_argument('-n', '--num-epochs', type=int, help='Total epochs.')
+    parser.add_argument('-n', '--num-episodes', type=int, help='Total epochs.')
     parser.add_argument('--discount', type=float, help='Discount Factor')
     parser.add_argument('--log-dir', type=str, default='../logs',
                         help='Logging direction.')

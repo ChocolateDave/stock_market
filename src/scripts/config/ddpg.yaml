@@ -1,12 +1,12 @@
 Env:
-  id: LunarLander-v2
-  new_step_api: true 
+  id: InvertedPendulum-v4
+  new_step_api: true,
 Trainer:
   buffer_size: 20000
   batch_size: 256
   device: cpu
-  num_epochs: 20000
-  name: LunarLander-v2
+  num_episodes: 20000
+  name: InvertedPendulum-v4
   policy_net: MLP
   policy_net_kwargs:
     hidden_size: 64

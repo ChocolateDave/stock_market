@@ -7,7 +7,6 @@
 from typing import Any, Mapping, Optional, Tuple, Union
 
 import torch as th
-from numpy import ndarray
 from src.agent.base_agent import BaseAgent
 from src.critic.ddpg_critic import DDPGCritic
 from src.nn import BaseNN
@@ -20,6 +19,7 @@ class DDPGAgent(BaseAgent):
     def __init__(self,
                  observation_size: int,
                  action_size: int,
+                 discrete_action: bool = False,
                  device: Optional[th.device] = None,
                  policy_net: Optional[Union[str, BaseNN]] = "MLP",
                  policy_net_kwargs: Optional[Mapping[str, Any]] = None,
@@ -38,6 +38,7 @@ class DDPGAgent(BaseAgent):
         self.policy: DDPGPolicy = DDPGPolicy(
             observation_size=observation_size,
             action_size=action_size,
+            discrete_action=discrete_action,
             policy_net=policy_net,
             policy_net_kwargs=policy_net_kwargs,
             device=device,
@@ -62,47 +63,13 @@ class DDPGAgent(BaseAgent):
         )
 
         self.critic_opt = optim.Adam(
-            self.critic.q_net.parameters(),
+            self.critic.critic_net.parameters(),
             lr=critic_lr or learning_rate
         )
         self.training_step = 0
 
-    def train_one_step(self,
-                       obs: ndarray,
-                       acs: ndarray,
-                       next_obs: ndarray,
-                       rews: ndarray,
-                       dones: ndarray,
-                       other_acs: Optional[ndarray] = None
-                       ) -> Mapping[str, float]:
-        obs = th.from_numpy(obs).to(self.device)
-        acs = th.from_numpy(acs).to(self.device)
-        rews = th.from_numpy(rews).to(self.device)
-        next_obs = th.from_numpy(next_obs).to(self.device)
-        dones = th.from_numpy(dones).to(self.device)
-        if other_acs:
-            other_acs = th.from_numpy(other_acs).to(self.device)
-
-        # Resolve dimension issue
-        if rews.dim() == 1:
-            rews = rews.unsqueeze(-1)
-        if dones.dim() == 1:
-            dones = dones.unsqueeze(-1)
-
-        critic_loss = self.update_critic(obs, acs, next_obs, rews, dones)
-        policy_loss = self.update_policy(obs, other_acs)
-        # I'm not sure what boolean needs to go in here?
-        # (Juanwu): non_blocking is used in case data is transferred in
-        # between cpu and gpu without proper handling
-        self.sync(non_blocking=True)
-
-        return {
-            "Critic/Loss": critic_loss,
-            "Policy/Loss": policy_loss
-        }
-
-    def save(self, filepath) -> None:
-        return super().save(filepath)
+    def reset_noise(self) -> None:
+        self.policy.reset_noise()
 
     def update_critic(self,
                       obs: Tensor,
@@ -111,15 +78,19 @@ class DDPGAgent(BaseAgent):
                       rews: Tensor,
                       dones: Tensor) -> float:
         # Shape issue
+        if rews.dim() == 1:
+            rews = rews.unsqueeze(-1)
+        if dones.dim() == 1:
+            dones = dones.unsqueeze(-1)
 
         # Bellman error target
         with th.no_grad():
             next_acs = self.policy.get_action(next_obs,
                                               explore=False,
                                               target=True)
-            target = rews + self.critic.discount * \
-                (1. - dones) * self.critic.target_forward(next_obs, next_acs)
-        Q_vals = self.critic.forward(obs, acs)
+            target = rews + self.critic.discount * (1. - dones) * \
+                self.critic.forward(next_obs, next_acs, target=True)
+        Q_vals = self.critic.forward(obs, acs, target=False)
         critic_loss = self.critic.loss(Q_vals, target)
 
         self.critic_opt.zero_grad()
@@ -128,13 +99,8 @@ class DDPGAgent(BaseAgent):
 
         return critic_loss.item()
 
-    def update_policy(self,
-                      obs: Optional[Tensor] = None,
-                      other_acs: Optional[Tensor] = None) -> float:
-        acs = self.policy.get_action(obs, explore=False)
-        if other_acs is not None:
-            # For MADDPG, concatenate actions from other agents
-            acs = th.hstack([acs, other_acs])
+    def update_policy(self, obs: Tensor) -> float:
+        acs = self.policy.get_action(obs, explore=False, target=False)
 
         policy_loss = self.critic.forward(obs, acs).mean()
 
@@ -144,8 +110,7 @@ class DDPGAgent(BaseAgent):
 
         return policy_loss.item()
 
-    # Updates target critic and policy networks
-    def sync(self, non_blocking: bool = False) -> None:
+    def update_target(self, non_blocking: bool = False) -> None:
         self.policy.sync(non_blocking)
         self.critic.sync(non_blocking)
 
