@@ -9,20 +9,20 @@ from typing import Any, Optional, Tuple, Union, Sequence
 
 import gym
 from gym.core import ActType, ObsType, Env
-from gym.spaces import Box, MultiDiscrete, Tuple as TupleSpace
+from gym.spaces import Box, Tuple as TupleSpace, Discrete
 import numpy as np
 
 # TODO (Maverick): market maker agent (maybe not needed)
 # TODO (Maverick): HMM
 
 
-class LogarithmActionWrapper(gym.ActionWrapper):
+class LogarithmAndSharesActionWrapper(gym.ActionWrapper):
 
     def __init__(self, env: gym.Env) -> None:
         super().__init__(env=env)
 
-    def action(self, act: Any) -> float:
-        return np.log(act)
+    def action(self, act: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, Tuple[int]]:
+        return (1. + np.log(act[0]), tuple(act[1].flatten()))
 
 
 class StockMarketEnv(gym.Env):
@@ -46,6 +46,7 @@ class StockMarketEnv(gym.Env):
                  step_size: float = 1.0,
                  price_std: float = 100.0, # This may need to be tuned way smaller, possibly below 10
                  noise_std: float = 10.0,
+                 worth_of_stocks: float = 0.1,
                  seed: int = 0) -> None:
         super().__init__()
 
@@ -56,6 +57,7 @@ class StockMarketEnv(gym.Env):
         self.max_budget = max_budget
         self.budget_discount = budget_discount
         self.max_shares = max_shares
+        self.worth_of_stocks = worth_of_stocks
 
         # Stock Market Parameters
         self.dt = step_size
@@ -69,14 +71,14 @@ class StockMarketEnv(gym.Env):
         self.n_stocks = num_correlated_stocks + num_uncorrelated_stocks + 1
         if not isinstance(start_prices, float):
             assert self.n_stocks == self.start_prices.shape or self.n_stocks == self.start_prices.shape[0]
-        self.observation_space = Box(low=0.0,
+        self.observation_space = Box(low=1.0,
                                      high=float("inf"),
-                                     shape=(self.num_agents, self.n_stocks))
+                                     shape=(1,))
         self.action_space = TupleSpace(
-            (Box(low=0.0, # Log Prices
+            (Box(low=1.0, # Prices, no log
                  high=float("inf"),
                  shape=(self.num_agents)),
-             MultiDiscrete([2 * max_shares + 1] * self.num_agents)) # Shares to put up
+             TupleSpace([Discrete(2 * max_shares + 1, start=-max_shares) for i in range(self.num_agents)])) # Shares to put up
         ) # 2 * max_shares + 1 for negative shares, and for 0 shares. Index 0 is 0, Index 1 - max_shares inclusive is negatives, Index max_shares + 1 - 2 * max_shares is positive
         self._seed = seed
         self.reset()
@@ -112,13 +114,12 @@ class StockMarketEnv(gym.Env):
 
     def _get_obs(self):
         out = []
-        out.append(self.curr_state['stock_price'].reshape(1, -1))
-        out.append(self.curr_state['correlated_stocks'].reshape(1, -1))
-        out.append(self.curr_state['uncorrelated_stocks'].reshape(1, -1))
-        out.append(self.curr_state['budgets'].reshape(1, -1))
-        out.append(self.curr_state['shares_held'].reshape(1, -1))
-        out.append(self.curr_state['agent_views'].reshape(1, -1))
-        out.append(self.curr_state['company_states'].reshape(1, -1))
+        out.append(self.current_price.reshape(1, -1))
+        out.append(self.correlated_stocks.reshape(1, -1))
+        out.append(self.uncorrelated_stocks.reshape(1, -1))
+        out.append(self.budgets.reshape(1, -1))
+        out.append(self.shares.reshape(1, -1))
+        out.append(self.valid_mask.reshape(1, -1))
         return np.hstack(out).flatten()
 
     def reset(self, 
@@ -170,10 +171,8 @@ class StockMarketEnv(gym.Env):
                 return np.log(c)
         self.CRRA_utility = np.vectorize(utility)
 
-        self.worth_of_stocks = 0.1 #TODO: move these to init?
         self.timestep = 0
         self.ep_len = 390
-        self.noise = 10.
         
         return (np.asarray(self.current_price),
                 {
@@ -182,49 +181,66 @@ class StockMarketEnv(gym.Env):
                     "budgets": self.budgets,
                     "shares": self.shares,
                     "valid_mask": self.valid_mask,
-                    "company_states": None  # TODO: Company states
                 })
 
-    def step(self, action: np.ndarray) -> Tuple:
-        proposed_prices = 1. + np.exp(action[:, 0])
-        proposed_shares = action[:, 1]
-        potential_budgets = self.curr_state['budgets'] + \
-            proposed_prices * (-proposed_shares)
-        potential_shares_held = self.curr_state['shares_held'] + \
-            proposed_shares
-        print(potential_budgets, potential_shares_held)
-        rewards = np.where(np.logical_or(potential_budgets <
-                           0., potential_shares_held < 0.), -100, 0.)
-        curr_price = self.curr_state['stock_price']
+    def step(self, action: Tuple[np.ndarray, Tuple[int]]) -> Tuple[np.ndarray, float, bool, bool, dict]:
+        proposed_prices = action[0]
+        proposed_shares = np.asarray(action[1])
+
+        prev_price = self.current_price
+
+        # Perform Market Clearing
         profits, delta_shares, close, volatility = self.clear(
-            np.copy(action), self.curr_state['stock_price'])
-        self.curr_state['stock_price'] = np.clip(close, 0, None)
-        diff = close - curr_price
-        diffs = diff / curr_price * self.curr_state['correlated_stocks'] + \
-            np.random.normal(loc=0,
-                             scale=self.noise * volatility,
-                             size=(self.num_correlated_stocks))
-        self.curr_state['correlated_stocks'] += diffs
-        self.curr_state['correlated_stocks'] = np.clip(
-            self.curr_state['correlated_stocks'], 1, None)
-        self.curr_state['uncorrelated_stocks'] += np.random.normal(
-            loc=0, scale=self.std, size=(self.num_uncorrelated_stocks))
-        self.curr_state['uncorrelated_stocks'] = np.clip(
-            self.curr_state['uncorrelated_stocks'], 1, None)
-        self.curr_state['budgets'] += profits
-        self.curr_state['shares_held'] += delta_shares
+            np.copy(proposed_prices), np.copy(proposed_shares), 
+            self.current_price)
+
+        self.current_price = np.clip(close, 1., None)
+
+        # Update Correlated Stocks
+        diff = self.current_price - prev_price
+        diffs = diff / prev_price * self.correlated_stocks + \
+            self.rng.normal(loc=0,
+                             scale=self.noise_std * volatility,
+                             size=(self.n_correlated_stocks)) # according to Gaussian White Noise, these differences are Gaussians
+        self.correlated_stocks += diffs
+        self.correlated_stocks = np.clip(
+            self.correlated_stocks, 1., None)
+
+        # Update Uncorrelated Stocks
+        self.uncorrelated_stocks += self.rng.normal(
+            loc=0, scale=self.price_std, size=(self.n_uncorrelated_stocks))
+        self.uncorrelated_stocks = np.clip(
+            self.uncorrelated_stocks, 1., None)
+        self.budgets += profits
+        self.shares += delta_shares
         c = 1. + self.budget_discount * \
-            self.curr_state['budgets'] + self.curr_state['shares_held'] * \
-            self.curr_state['stock_price'] * self.worth_of_stocks
-        print(self.eta)
+            self.budgets + self.shares * \
+            self.current_price * self.worth_of_stocks
+
+        # Are proposed budgets and shares to sell/buy violating constraints?
+        potential_budgets = self.budgets + \
+            proposed_prices * (-proposed_shares)
+        potential_shares_held = self.shares + \
+            proposed_shares
+        violations = (potential_budgets < 0.) | (potential_shares_held < 0.)
+        rewards = np.where(violations, -100, 0.)
+        # Of non violating rewards, calculate their utility
         rewards = np.where(
             rewards >= 0., self.CRRA_utility(c, self.eta), rewards)
-        self.timestep += 1
-        if np.any(rewards < 0.):
-            return self.curr_state, rewards, True, None, None
-        return self.curr_state, rewards, self.timestep >= self.ep_len, None, None
 
-        # implement hmmlearn
+        self.timestep += 1
+        done = False
+        info = {
+                    "correlated_stocks": self.correlated_stocks,
+                    "uncorrelated_stocks": self.uncorrelated_stocks,
+                    "budgets": self.budgets,
+                    "shares": self.shares,
+                    "valid_mask": self.valid_mask,
+                }
+        if np.any(rewards < 0.) or self.timestep >= self.ep_len:
+            self.current_price, info = self.reset()
+            done = True
+        return np.asarray(self.current_price), rewards, done, None, info
 
     # Your broker or clearing institution typically does this in real life
     # action is a price and volume array. Volume must be a nonnegative number
@@ -232,24 +248,22 @@ class StockMarketEnv(gym.Env):
     # Technically, this is screwing over sellers, as there are no market makers here.
     # actions: log prices, share_vol = int, + -> buy, - -> sell, 0 -> hold
     # TODO: Cleanup
-    def clear(self, action: np.ndarray, close):
+    def clear(self, proposed_prices:np.ndarray, proposed_shares:np.ndarray, close:np.ndarray) -> Tuple:
         volatility = 1.
         # the standard deviation of share_prices will determine
         # correlated stock standard deviation
         share_prices = []
-        n, _ = action.shape
-        bidders = action[action[:, 1] > 0, :]
-        sellers = action[action[:, 1] < 0, :]
+        n = self.num_agents
 
        # Now randomly order each
-        b, _ = bidders.shape
-        s, _ = sellers.shape
-        bid_indices = np.random.permutation(b)
-        seller_indices = np.random.permutation(s)
-        bidder_prices = 1. + np.exp(bidders[:, 0])
-        seller_prices = 1. + np.exp(sellers[:, 0])
-        bidder_shares_left = np.copy(bidders[:, 1])
-        seller_shares_left = np.abs(np.copy(sellers[:, 1]))
+        b = np.sum(proposed_shares > 0)
+        s = np.sum(proposed_shares < 0)
+        bid_indices = self.rng.permutation(b)
+        seller_indices = self.rng.permutation(s)
+        bidder_prices = proposed_prices[proposed_shares > 0]
+        seller_prices = proposed_prices[proposed_shares < 0]
+        bidder_shares_left = np.copy(proposed_shares[proposed_shares > 0])
+        seller_shares_left = np.abs(np.copy(proposed_shares[proposed_shares < 0]))
         bid_profits = np.zeros((b))
         seller_profits = np.zeros((s))
         delta_bid_shares = np.zeros((b))
@@ -266,8 +280,8 @@ class StockMarketEnv(gym.Env):
                 ask_price, ask_vol = seller_prices[ask_idx], seller_shares_left[ask_idx]
                 if bid_price >= ask_price:  # this may change when adding market maker
                     close = ask_price  # sellers are technically last in transaction even with market markers
-                    share_prices.append(bidders[bid_idx, 0])
-                    share_prices.append(sellers[ask_idx, 0])
+                    share_prices.append(bidder_prices[bid_idx]) # This allows us to calculate market volatility
+                    share_prices.append(seller_prices[ask_idx])
                     if bid_vol < ask_vol:
                         seller_shares_left[ask_idx] -= bid_vol
                         bidder_shares_left[bid_idx] = 0.
@@ -307,9 +321,9 @@ class StockMarketEnv(gym.Env):
         bid_profit_idx = 0
         ask_profit_idx = 0
         for i in range(n):
-            if action[i, 1] == 0:
+            if proposed_shares[i] == 0:
                 continue
-            elif action[i, 1] > 0:
+            elif proposed_shares[i] > 0:
                 profits[i] = bid_profits[bid_profit_idx]
                 delta_shares[i] = delta_bid_shares[bid_profit_idx]
                 bid_profit_idx += 1
@@ -317,4 +331,4 @@ class StockMarketEnv(gym.Env):
                 profits[i] = seller_profits[ask_profit_idx]
                 delta_shares[i] = delta_ask_shares[ask_profit_idx]
                 ask_profit_idx += 1
-        return profits, delta_shares, close, volatility
+        return profits, delta_shares, np.asarray(close), volatility
