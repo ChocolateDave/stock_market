@@ -27,8 +27,7 @@ class DDPGCritic(BaseCritic):
                  discount: float = 0.99,
                  learning_rate: float = 1e-4,
                  soft_update_tau: Optional[float] = None,
-                 grad_clip: Optional[float] = None,
-                 optimizer_kwargs: Optional[Mapping[str, Any]] = None) -> None:
+                 grad_clip: Optional[float] = None) -> None:
         super().__init__()
 
         self.obs_size = observation_size
@@ -62,10 +61,16 @@ class DDPGCritic(BaseCritic):
         self.target_q_net = deepcopy(self.q_net).to(device)
 
     def forward(self, obs: Tensor, action: Optional[Tensor]) -> Tensor:
+        if action.dim() == 1:
+            action = action.unsqueeze(-1)
+
         inputs = th.cat((obs, action), dim=-1)
         return self.q_net.forward(inputs)
 
     def target_forward(self, obs: Tensor, action: Optional[Tensor]) -> Tensor:
+        if action.dim() == 1:
+            action = action.unsqueeze(-1)
+
         inputs = th.cat((obs, action), dim=-1)
         return self.target_q_net.forward(inputs)
 

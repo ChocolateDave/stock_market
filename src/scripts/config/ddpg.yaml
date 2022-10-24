@@ -1,8 +1,13 @@
 Env:
   id: LunarLander-v2
-  new_step_api: true
-Agent:
+  new_step_api: true 
+Trainer:
+  id: DDPGTrainer
+  buffer_size: 20000
+  batch_size: 256
   device: cpu
+  num_epoch: 20000
+  name: LunarLander-v2
   policy_net: MLP
   policy_net_kwargs:
     hidden_size: 64
@@ -11,4 +16,5 @@ Agent:
   critic_net_kwargs:
     hidden_size: 64
     num_layers: 2
-  
+  learning_rate: 0.0005
+  discount: 0.99

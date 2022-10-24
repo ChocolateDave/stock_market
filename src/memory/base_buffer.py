@@ -4,7 +4,7 @@
 # @date   Oct-2-22
 # =============================================================================
 """The Base Replay Buffer data structure."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from numpy import ndarray
 from typing import List, Sequence, Tuple, Union
 
@@ -27,7 +27,7 @@ class Path:
 @dataclass
 class BaseBuffer:
     max_size: int = 100000
-    paths: List[Path] = None
+    paths: List[Path] = field(default_factory=lambda: [])
     observations: Union[Sequence[ndarray], ndarray] = None
     actions: Union[Sequence[ndarray], ndarray] = None
     next_observations: Union[Sequence[ndarray], ndarray] = None

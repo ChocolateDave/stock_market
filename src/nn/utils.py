@@ -62,7 +62,6 @@ def network_resolver(query: Union[str, Any] = "mlp",
         nn for nn in vars(src.nn).values()
         if isinstance(nn, type) and issubclass(nn, base_cls)
     ]
-    print(networks)
     networks_dict = {}
     return resolver(
         networks, networks_dict, query, base_cls,

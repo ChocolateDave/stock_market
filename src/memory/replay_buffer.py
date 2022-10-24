@@ -1,8 +1,8 @@
-# ==============================================================================
+# =============================================================================
 # @file   replay_buffer.py
 # @author Juanwu Lu
 # @date   Oct-9-22
-# ==============================================================================
+# =============================================================================
 """Vanilla Replay Buffer Module"""
 from typing import Sequence
 
@@ -65,6 +65,6 @@ class ReplayBuffer(BaseBuffer):
             idx: int = -1
             while cntr <= batch_size:
                 recent_sample = self.paths[idx]
-                cntr += recent_sample.length()
+                cntr += recent_sample.length
                 idx -= 1
             return convert_sequence_of_paths(self.paths[idx:])

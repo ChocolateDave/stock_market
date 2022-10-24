@@ -6,53 +6,14 @@
 """Utility functions for experiements."""
 import inspect
 import os
-from dataclasses import Field, dataclass, field
 from typing import (Any, Callable, ItemsView, Mapping, Optional, Sequence,
-                    Tuple, Union)
+                    Union)
 
-import torch as th
 import yaml
 from numpy import ndarray
 from torch import Tensor
 
 _PathLike = Union[str, 'os.PathLike[str]']
-
-
-@dataclass
-class Pace:
-    """A single step interaction transition data class."""
-
-    observation: Tensor
-    action: Tensor
-    next_observation: Tensor
-    reward: Tensor
-    terminal: Tensor
-
-    @property
-    def _cls_fields(self) -> Tuple[Field, ...]:
-        return field(self.__class__)
-
-    def cpu(self) -> None:
-        for _field in self._cls_fields:
-            if isinstance(_field, Tensor):
-                _field.cpu()
-
-    def cuda(self) -> None:
-        for _field in self._cls_fields:
-            if isinstance(_field, Tensor):
-                _field.cuda()
-
-    def to(self,
-           device: Union[str, int, th.device],
-           non_blocking=False) -> None:
-        for _field in self._cls_fields:
-            if isinstance(_field, Tensor):
-                _field.to(deivce=device, non_blocking=non_blocking)
-
-    def pin_memory(self) -> None:
-        for _field in self._cls_fields:
-            if isinstance(_field, Tensor):
-                _field.pin_memory()
 
 
 # Metrics

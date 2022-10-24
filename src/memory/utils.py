@@ -27,9 +27,9 @@ def add_noise(data: np.ndarray, noise_scale: float = 0.01) -> np.ndarray:
 
 
 def convert_sequence_of_paths(paths: Sequence[Path]) -> Tuple:
-    states = np.concatenate([path.state for path in paths])
+    states = np.concatenate([path.observation for path in paths])
     actions = np.concatenate([path.action for path in paths])
-    next_states = np.concatenate([path.next_state for path in paths])
+    next_states = np.concatenate([path.next_observation for path in paths])
     rewards = np.concatenate([path.reward for path in paths])
     dones = np.concatenate([path.done for path in paths])
 

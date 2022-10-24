@@ -109,43 +109,32 @@ class DDPGPolicy(BasePolicy, nn.Module):
 
         return self.policy_net.forward(obs)
 
-    def get_action(self, obs: Tensor, explore: bool = True) -> ndarray:
+    def get_action(self,
+                   obs: Tensor,
+                   explore: bool = True,
+                   target: bool = False) -> ndarray:
         if len(obs.shape) == 1:
             obs = obs.unsqueeze(0)
 
-        actions: Tensor = self.policy_net(obs).detach()  # not in comp. graph
+        if target:
+            actions: Tensor = self.policy_net(obs)
+        else:
+            actions: Tensor = self.policy_net(obs)
+
         if self.discrete_action:
             if explore:
                 # Random sample from discrete action space with gumbel noise
-                # ==========================================================
                 actions = nn.functional.gumbel_softmax(actions, hard=True)
             else:
                 # Generate one-hot encoding of the max-policy actions
-                # ===================================================
                 actions = (actions == actions.max(1, keepdim=True)[0]).float()
         else:
             if explore:
                 # Explore continous action space with OUNoise
-                # ===========================================
                 actions += self.exploration.forward(actions)
             actions.clamp(-1, 1)
 
-        return actions.cpu().numpy()
-
-    def get_target_action(self, obs: Tensor) -> ndarray:
-        if len(obs.shape) == 1:
-            obs = obs.unsqueeze(0)
-
-        with th.no_grad():
-            actions: Tensor = self.target_policy_net(obs)
-            if self.discrete_action:
-                # Generate one-hot encoding of the max-policy actions
-                # ===================================================
-                actions = (actions == actions.max(1, keepdim=True)[0]).float()
-            else:
-                actions.clamp(-1, 1)
-
-        return actions.cpu().numpy()
+        return actions
 
     def reset_noise(self) -> None:
         if not self.discrete_action:
