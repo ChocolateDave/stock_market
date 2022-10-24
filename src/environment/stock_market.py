@@ -128,54 +128,62 @@ class StockMarketEnv(gym.Env):
             self._seed = seed
         self.rng = np.random.default_rng(seed=seed or self._seed)
 
-        stocks = np.clip(
-            np.random.normal(loc=self.start_prices,
-                             scale=self.price_std,
-                             size=(self.n_stocks,)),
-            a_min=1., a_max=None # Can never have prices below 1 on stock market
-        )
-        target_stock = stocks[0]
-        correlated_stocks = stocks[1:self.n_correlated_stocks + 1]
-        uncorrelated_stocks = stocks[self.n_correlated_stocks + 1:]
+        # Randomly generate starting stock prices for correlated and uncorrelated stocks
+        if isinstance(self.start_prices, float):
+            self.current_price = self.start_prices
+            other_stocks = np.clip(
+                np.random.normal(loc=self.start_prices,
+                                scale=self.price_std,
+                                size=(self.n_correlated_stocks + self.n_uncorrelated_stocks,)),
+                a_min=1., a_max=None # Can never have prices below 1 on stock market
+            )
+        else:
+            self.current_price = self.start_prices[0]
+            other_stocks = self.start_prices[1:]
+        self.correlated_stocks = other_stocks[:self.n_correlated_stocks]
+        self.uncorrelated_stocks = other_stocks[self.n_correlated_stocks:]
 
+        # Randomly create masks for agents 
+        self.valid_mask = np.zeros(shape=(self.num_agents, self.n_stocks),
+                                   dtype="bool")
+        self.valid_mask[:, 1:1+self.n_correlated_stocks] = True
+        self.valid_mask[self.rng.choice(2, size=self.num_agents).astype(bool),
+                        1 + self.n_correlated_stocks:] = True
+
+        # Starting budgets and shares
+        self.budgets = self.min_budget + self.rng.random(
+            size=(self.num_agents), dtype="float32") * (
+                self.max_budget - self.min_budget)
+        self.shares = self.rng.integers(low=1, #TODO: move this to init
+                                        high=self.max_shares,
+                                        size=(self.num_agents))
+
+        # Randomize utility functions
         self.eta = np.clip(
             np.random.normal(loc=1.5, scale=1.5, size=(self.num_agents,)),
             a_min=0, a_max=10
         )
-
         def utility(c, eta):
             if eta != 1.:
                 return (c ** (1. - eta) - 1.) / (1. - eta)
             else:
                 return np.log(c)
         self.CRRA_utility = np.vectorize(utility)
-        self.num_agents = 10
-        self.num_correlated_stocks = 19
-        self.num_uncorrelated_stocks = 10
-        self.num_company_states = 5
-        self.start_price = 100.
-        self.curr_price = self.start_price
-        self.std = 100.
-        self.worth_of_stocks = 0.1
+
+        self.worth_of_stocks = 0.1 #TODO: move these to init?
         self.timestep = 0
         self.ep_len = 390
         self.noise = 10.
-        self.budget_discount = 0.9
         
-        views = np.zeros((self.num_agents, total_stocks), dtype=np.int32)
-        views[:, 0] = 1
-        views[:, 1:1+self.num_correlated_stocks] = 1
-        views[[0, 2, 5, 6, 7, 9], 1 + self.num_correlated_stocks:] = 1
-        self.curr_state = {
-            'stock_price': np.asarray(self.start_price),
-            'correlated_stocks': correlated_stocks,
-            'uncorrelated_stocks': uncorrelated_stocks,
-            'budgets': np.asarray([100., 100., 100., 100., 100., 1000., 1000., 1000., 1000., 10000.]),
-            'shares_held': np.asarray([500., 500., 500., 500., 500., 500., 500., 500., 500., 500.]),
-            'agent_views': views,  # num_agents x num of stocks array, one hot encoded, 1 means that it is viewable, 0 is unviewable, order is studied stock, correlated stocks, uncorrelated stocks
-            'company_states': np.zeros((self.num_company_states)),
-        }
-        return self.curr_state, None
+        return (np.asarray(self.current_price),
+                {
+                    "correlated_stocks": self.correlated_stocks,
+                    "uncorrelated_stocks": self.uncorrelated_stocks,
+                    "budgets": self.budgets,
+                    "shares": self.shares,
+                    "valid_mask": self.valid_mask,
+                    "company_states": None  # TODO: Company states
+                })
 
     def step(self, action: np.ndarray) -> Tuple:
         proposed_prices = 1. + np.exp(action[:, 0])
