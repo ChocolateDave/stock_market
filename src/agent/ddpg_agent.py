@@ -23,9 +23,9 @@ class DDPGAgent(BaseAgent):
                  observation_size: int,
                  action_size: int,
                  device: Optional[th.device] = None,
-                 policy_net: Optional[Union[str, BaseNN]] = "mlp",
+                 policy_net: Optional[Union[str, BaseNN]] = "MLP",
                  policy_net_kwargs: Optional[Mapping[str, Any]] = None,
-                 critic_net: Optional[Union[str, BaseNN]] = "mlp",
+                 critic_net: Optional[Union[str, BaseNN]] = "MLP",
                  critic_net_kwargs: Optional[Mapping[str, Any]] = None,
                  lr: Optional[float] = 1e-4,
                  policy_lr: Optional[float] = None,
@@ -39,13 +39,13 @@ class DDPGAgent(BaseAgent):
 
         self.batch_size = batch_size
         self.policy = DDPGPolicy(
-            observation_size,
-            action_size,
-            policy_net,
-            policy_net_kwargs,
-            device,
-            policy_lr or lr,
-            soft_update_tau,
+            observation_size=observation_size,
+            action_size=action_size,
+            policy_net=policy_net,
+            policy_net_kwargs=policy_net_kwargs,
+            device=device,
+            learning_rate=policy_lr or lr,
+            soft_update_tau=soft_update_tau,
         )
         self.policy_opt = optim.Adam(
             self.policy.policy_net.parameters(),
@@ -53,15 +53,15 @@ class DDPGAgent(BaseAgent):
         )
 
         self.critic = DDPGCritic(
-            observation_size,
-            action_size,
-            critic_net,
-            critic_net_kwargs,
-            device,
-            discount,
-            critic_lr,
-            soft_update_tau,
-            grad_clip
+            observation_size=observation_size,
+            action_size=action_size,
+            critic_net=critic_net,
+            critic_net_kwargs=critic_net_kwargs,
+            device=device,
+            discount=discount,
+            learning_rate=critic_lr or lr,
+            soft_update_tau=soft_update_tau,
+            grad_clip=grad_clip
         )
 
         self.critic_opt = optim.Adam(
@@ -125,3 +125,23 @@ class DDPGAgent(BaseAgent):
     def sync(self, non_blocking: bool = False) -> None:
         self.policy.sync(non_blocking)
         self.critic.sync(non_blocking)
+
+
+if __name__ == "__main__":
+    import argparse
+    import gym
+    from src.utils import load_config
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', '-c', type=str, required=True,
+                        help='YAML configuration file path.')
+    args = parser.parse_args()
+
+    config = load_config(args.config)
+    env = gym.make(**config["Env"])
+    agent = DDPGAgent(
+        observation_size=env.observation_space.shape[0],
+        action_size=env.action_space.n,
+        **config["Agent"]
+    )
+    print(f'Agent: {agent}.')

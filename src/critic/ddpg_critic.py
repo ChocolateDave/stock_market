@@ -11,7 +11,7 @@ import torch as th
 from src.critic.base_critic import BaseCritic
 from src.nn.base_nn import BaseNN
 from src.nn.utils import network_resolver
-from torch import Tensor, optim, nn
+from torch import Tensor, nn
 
 
 class DDPGCritic(BaseCritic):
@@ -39,6 +39,7 @@ class DDPGCritic(BaseCritic):
         self.grad_clip = grad_clip
         self.loss = nn.MSELoss()
 
+        critic_net_kwargs = critic_net_kwargs or {}
         if isinstance(critic_net, BaseNN):
             assert critic_net.in_feature == observation_size + action_size, \
                 ValueError(
@@ -56,13 +57,9 @@ class DDPGCritic(BaseCritic):
             critic_net_kwargs["in_feature"] = observation_size + action_size
             critic_net_kwargs["out_feature"] = 1
             self.q_net = network_resolver(
-                critic_net, **(critic_net_kwargs or {})
+                critic_net, **critic_net_kwargs
             ).to(device)
         self.target_q_net = deepcopy(self.q_net).to(device)
-
-        self.optimizer = optim.Adam(self.q_net.parameters(),
-                                    lr=self.learning_rate,
-                                    **(optimizer_kwargs or {}))
 
     def forward(self, obs: Tensor, action: Optional[Tensor]) -> Tensor:
         inputs = th.cat((obs, action), dim=-1)

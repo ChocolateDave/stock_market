@@ -28,6 +28,7 @@ class MADDPGTrainer(Trainer):
         # TODO: Implement single epoch training
 
         # Collect data for training
+
         pass
 
     def exec_one_epoch(self, epoch: int = -1) -> Any:

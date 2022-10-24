@@ -72,6 +72,7 @@ class DDPGPolicy(BasePolicy, nn.Module):
         self.act_size = action_size
         self.soft_update_tau = soft_update_tau
 
+        policy_net_kwargs = policy_net_kwargs or {}
         if isinstance(policy_net, BaseNN):
             assert policy_net.in_feature == observation_size and \
                 policy_net.out_feature == action_size, ValueError(
@@ -86,8 +87,9 @@ class DDPGPolicy(BasePolicy, nn.Module):
             policy_net_kwargs['in_feature'] = observation_size
             policy_net_kwargs['out_feature'] = action_size
             self.policy_net = network_resolver(
-                policy_net, **(policy_net_kwargs or {})
-            ).to(device)
+                policy_net, **policy_net_kwargs
+            )
+            self.policy_net = self.policy_net.to(device)
         self.target_policy_net = deepcopy(self.policy_net).to(device)
 
         self.optimizer = th.optim.Adam(self.policy_net.parameters(),
@@ -134,13 +136,14 @@ class DDPGPolicy(BasePolicy, nn.Module):
         if len(obs.shape) == 1:
             obs = obs.unsqueeze(0)
 
-        actions: Tensor = self.target_policy_net(obs).detach()  # not in comp. graph
-        if self.discrete_action:
-            # Generate one-hot encoding of the max-policy actions
-            # ===================================================
-            actions = (actions == actions.max(1, keepdim=True)[0]).float()
-        else:
-            actions.clamp(-1, 1)
+        with th.no_grad():
+            actions: Tensor = self.target_policy_net(obs)
+            if self.discrete_action:
+                # Generate one-hot encoding of the max-policy actions
+                # ===================================================
+                actions = (actions == actions.max(1, keepdim=True)[0]).float()
+            else:
+                actions.clamp(-1, 1)
 
         return actions.cpu().numpy()
 

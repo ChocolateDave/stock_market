@@ -62,6 +62,7 @@ def network_resolver(query: Union[str, Any] = "mlp",
         nn for nn in vars(src.nn).values()
         if isinstance(nn, type) and issubclass(nn, base_cls)
     ]
+    print(networks)
     networks_dict = {}
     return resolver(
         networks, networks_dict, query, base_cls,
@@ -79,10 +80,11 @@ def average_gradients(model: BaseNN) -> None:
             param.grad.data, op=distributed.reduce_op.SUM, group=0)
         param.grad.data /= size
 
-device = None
 
 def from_numpy(*args, **kwargs):
+    device = kwargs.get("device")
     return torch.from_numpy(*args, **kwargs).float().to(device)
 
+
 def to_numpy(tensor):
-    return tensor.to('cpu').detach().numpy()
+    return tensor.cpu().detach().numpy()

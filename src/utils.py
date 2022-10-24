@@ -5,20 +5,17 @@
 # =============================================================================
 """Utility functions for experiements."""
 import inspect
+import os
+from dataclasses import Field, dataclass, field
+from typing import (Any, Callable, ItemsView, Mapping, Optional, Sequence,
+                    Tuple, Union)
+
 import torch as th
-from dataclasses import dataclass, field, Field
+import yaml
 from numpy import ndarray
 from torch import Tensor
-from typing import (
-    Any,
-    Callable,
-    ItemsView,
-    Mapping,
-    Sequence,
-    Tuple,
-    Optional,
-    Union
-)
+
+_PathLike = Union[str, 'os.PathLike[str]']
 
 
 @dataclass
@@ -198,3 +195,11 @@ def resolver(classes: Sequence[Any],
 
     choices = set(cls.__name__ for cls in classes) | set(class_dict.keys())
     raise ValueError(f"Failed to resolve '{query:s}' among choices {choices}.")
+
+
+def load_config(filepath: _PathLike) -> Mapping[str, Any]:
+    assert filepath.split('.')[-1] == 'yaml'
+    with open(filepath, mode='r', encoding='utf-8') as file:
+        config = yaml.safe_load(file)
+
+    return config

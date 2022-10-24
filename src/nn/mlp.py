@@ -104,7 +104,7 @@ class MLP(BaseNN):
         self.lins: nn.ModuleList[nn.Linear] = nn.ModuleList()
         iterator = zip(hidden_list[:-1], hidden_list[1:], bias)
         for in_feature, out_feature, bias in iterator:
-            self.lins.append(nn.Linear(in_feature, out_feature, bias))
+            self.lins.append(nn.Linear(in_feature, out_feature, bias=bias))
 
         # Initialize Normalization layers
         # =========================================

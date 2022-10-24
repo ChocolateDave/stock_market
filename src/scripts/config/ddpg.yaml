@@ -1,0 +1,14 @@
+Env:
+  id: LunarLander-v2
+  new_step_api: true
+Agent:
+  device: cpu
+  policy_net: MLP
+  policy_net_kwargs:
+    hidden_size: 64
+    num_layers: 2
+  critic_net: MLP
+  critic_net_kwargs:
+    hidden_size: 64
+    num_layers: 2
+  
