@@ -79,7 +79,7 @@ class StockMarketEnv(gym.Env):
                  high=float("inf"),
                  shape=(self.num_agents)),
              TupleSpace([Discrete(2 * max_shares + 1, start=-max_shares) for i in range(self.num_agents)])) # Shares to put up
-        ) # 2 * max_shares + 1 for negative shares, and for 0 shares. Index 0 is 0, Index 1 - max_shares inclusive is negatives, Index max_shares + 1 - 2 * max_shares is positive
+        ) # 2 * max_shares + 1 for negative shares, and for 0 shares.
         self._seed = seed
         self.reset()
 
