@@ -89,7 +89,7 @@ class DDPGAgent(BaseAgent):
         if dones.dim() == 1:
             dones = dones.unsqueeze(-1)
 
-        critic_loss = self.update_critic(obs, acs, rews, next_obs, dones)
+        critic_loss = self.update_critic(obs, acs, next_obs, rews, dones)
         policy_loss = self.update_policy(obs, other_acs)
         # I'm not sure what boolean needs to go in here?
         # (Juanwu): non_blocking is used in case data is transferred in

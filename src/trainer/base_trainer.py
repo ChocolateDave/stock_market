@@ -6,18 +6,21 @@
 """Base Reinforcement Learning trainer class."""
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
+from os import path as osp
 from typing import Any, Mapping, Sequence, Union
 
 import numpy as np
 from gym.core import Env
-from torch.utils.tensorboard import SummaryWriter
-from os import path as osp
 from src.agent.base_agent import BaseAgent
 from src.memory.base_buffer import BaseBuffer, Path
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 _PathLike = Union[str, 'os.PathLike[str]']
+_logger = logging.getLogger(__name__)
 
 
 class BaseTrainer:
@@ -65,17 +68,20 @@ class BaseTrainer:
                         done=np.asarray(dones, dtype="int64"))
             self.buffer.add([path], noised=False)
 
-        for epoch in range(1, self.num_epochs + 1):
+        for epoch in tqdm(range(1, self.num_epochs + 1),
+                          desc='Training Progress',
+                          position=0,
+                          leave=False):
             log = self.train_one_epoch(epoch)
             for key, val in log.items():
                 key = 'Train/' + key
                 self.writer.add_scalar(key, val, epoch)
 
-        if execution:
-            log = self.exec_one_epoch(epoch)
-            for key, val in log.items():
-                key = 'Execution/' + key
-                self.writer.add_scalar(key, val)
+            if execution:
+                log = self.exec_one_epoch(epoch)
+                for key, val in log.items():
+                    key = 'Execution/' + key
+                    self.writer.add_scalar(key, val, epoch)
 
     def set_train(self) -> None:
         if isinstance(self.agents, Sequence):

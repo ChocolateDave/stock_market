@@ -6,9 +6,9 @@
 """Neural network utilities."""
 from typing import Any, Callable, Union
 
+import torch
 from src.nn.base_nn import BaseNN
 from src.utils import resolver
-import torch
 from torch import Tensor, distributed
 
 
@@ -18,7 +18,7 @@ def _swish(x: Tensor) -> Tensor:
     return x * x.sigmoid()
 
 
-def activation_resolver(query: Union[str, Any] = "relu",
+def activation_resolver(act_id: Union[str, Any] = "relu",
                         *args, **kwargs) -> Callable:
     import torch
     base_cls = torch.nn.Module
@@ -30,13 +30,13 @@ def activation_resolver(query: Union[str, Any] = "relu",
     acts += [_swish]
     act_dict = {}
     return resolver(
-        acts, act_dict, query, base_cls, base_cls_repr, *args, **kwargs
+        acts, act_dict, act_id, base_cls, base_cls_repr, *args, **kwargs
     )
 
 
 # Normalization resolver
 # =========================================
-def normalization_resolver(query: Union[str, Any] = "layer_norm",
+def normalization_resolver(norm_id: Union[str, Any] = "layer_norm",
                            *args, **kwargs) -> Callable:
     import torch
     base_cls = torch.nn.Module
@@ -47,13 +47,13 @@ def normalization_resolver(query: Union[str, Any] = "layer_norm",
     ]
     norm_dict = {}
     return resolver(
-        norms, norm_dict, query, base_cls, base_cls_repr, *args, **kwargs
+        norms, norm_dict, norm_id, base_cls, base_cls_repr, *args, **kwargs
     )
 
 
 # Network Resolver
 # =========================================
-def network_resolver(query: Union[str, Any] = "mlp",
+def network_resolver(network_id: Union[str, Any] = 'MLP',
                      *args, **kwargs) -> Callable:
     import src.nn
     base_cls = src.nn.BaseNN
@@ -64,7 +64,7 @@ def network_resolver(query: Union[str, Any] = "mlp",
     ]
     networks_dict = {}
     return resolver(
-        networks, networks_dict, query, base_cls,
+        networks, networks_dict, network_id, base_cls,
         base_cls_repr, *args, **kwargs
     )
 

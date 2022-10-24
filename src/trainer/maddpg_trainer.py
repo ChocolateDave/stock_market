@@ -9,10 +9,10 @@ from typing import Any, Sequence
 from gym.core import Env
 from src.agent.base_agent import BaseAgent
 from src.memory.multi_agent_replay_buffer import MultiAgentReplayBuffer
-from src.trainer.base_trainer import Trainer
+from src.trainer.base_trainer import BaseTrainer
 
 
-class MADDPGTrainer(Trainer):
+class MADDPGTrainer(BaseTrainer):
 
     def __init__(self,
                  env: Env,
