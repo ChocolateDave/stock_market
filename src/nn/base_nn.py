@@ -25,12 +25,12 @@ class BaseNN(nn.Module):
             param.data.copy_(src_param.data, non_blocking)
 
     def soft_update(self,
-                    src: nn.Module,
+                    target: nn.Module,
                     tau: float,
                     non_blocking: bool = False) -> None:
         # Apply exponential moving average (EMA) update.
-        for param, src_param in zip(self.parameters(), src.parameters()):
+        for param, tgt_param in zip(self.parameters(), target.parameters()):
             param.data.copy_(
-                src_param.data * (1.0 - tau) + param.data * tau,
+                param.data * (1.0 - tau) + tgt_param.data * (1.0 - tau),
                 non_blocking
             )

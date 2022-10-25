@@ -37,8 +37,9 @@ class DDPGTrainer(BaseTrainer):
                  critic_lr: Optional[float] = None,
                  discount: Optional[float] = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
-                 soft_update_tau: Optional[float] = 0.9) -> None:
-        super().__init__(log_dir, num_episodes, name)
+                 soft_update_tau: Optional[float] = 0.9,
+                 max_episode_steps: Optional[int] = None) -> None:
+        super().__init__(log_dir, num_episodes, name, max_episode_steps)
 
         # Retreive observation and action size
         if len(env.observation_space.shape) > 2:
