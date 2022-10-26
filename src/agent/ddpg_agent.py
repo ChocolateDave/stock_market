@@ -25,7 +25,7 @@ class DDPGAgent(BaseAgent):
                  critic_lr: Optional[float] = None,
                  discount: Optional[float] = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
-                 soft_update_tau: Optional[float] = 0.9,
+                 soft_update_tau: Optional[float] = 0.02,
                  **kwargs) -> None:
         super().__init__()
 
@@ -71,9 +71,9 @@ class DDPGAgent(BaseAgent):
                       dones: Tensor) -> float:
         # Shape issue
         if rews.dim() == 1:
-            rews = rews.unsqueeze(-1)
+            rews = rews.view(-1, 1)
         if dones.dim() == 1:
-            dones = dones.unsqueeze(-1)
+            dones = dones.view(-1, 1)
 
         # Bellman error target
         with th.no_grad():

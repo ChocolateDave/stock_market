@@ -9,6 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping, Optional
 
+import numpy as np
 import torch as th
 from src.nn.ddpg_nn import PolicyNet
 from src.policy.base_policy import BasePolicy
@@ -19,7 +20,7 @@ from torch.distributions import Distribution
 # Ornstein-Uhlenbeck Noise for continous random exploration
 # https://github.com/songrotek/DDPG/blob/master/ou_noise.py
 # =========================================================
-class OUNoise(nn.Module):
+class OUNoise:
     def __init__(self,
                  action_size: int,
                  mu: float = 0.0,
@@ -36,20 +37,18 @@ class OUNoise(nn.Module):
 
         self.reset()
 
-    def forward(self, x: Tensor) -> Tensor:
-        device = x.device
+    def sample(self) -> np.ndarray:
 
-        x = self.state.to(device)
+        x = self.state
         dx = self.theta * (self.mu - x) + \
-            self.sigma * th.randn(size=(len(x),), device=device)
+            self.sigma * np.random.randn(len(x))
         self.state = x + dx
         noise = self.state * self.scale
-        noise = noise.requires_grad_(False)
 
         return noise
 
     def reset(self) -> None:
-        self.state = th.ones(self.action_size) * self.mu
+        self.state = np.ones(self.action_size) * self.mu
 
 
 class DDPGPolicy(BasePolicy, nn.Module):
@@ -79,7 +78,7 @@ class DDPGPolicy(BasePolicy, nn.Module):
         # Exploration
         self.discrete_action = discrete_action
         if discrete_action:
-            self.exploration = 0.9  # epsilon-greedy initial value
+            self.exploration = 0.3  # epsilon-greedy initial value
         else:
             self.exploration = OUNoise(action_size)
 
@@ -106,9 +105,11 @@ class DDPGPolicy(BasePolicy, nn.Module):
                 actions = (actions == actions.max(1, keepdim=True)[0]).float()
 
         else:
+            actions = nn.functional.tanh(actions)
             if explore:
                 # Explore continous action space with OUNoise
-                actions += self.exploration.forward(actions)
+                actions += th.from_numpy(
+                    self.exploration.sample()).to(actions.device)
             actions.clamp(-1, 1)
 
         return actions

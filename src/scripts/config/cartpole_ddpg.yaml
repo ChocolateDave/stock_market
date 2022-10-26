@@ -1,0 +1,22 @@
+Env:
+  id: CartPole-v1
+  new_step_api: true,
+Trainer:
+  buffer_size: 1000000
+  batch_size: 256
+  device: cpu
+  max_episode_steps: 200
+  num_episodes: 500
+  name: CartPole-v1
+  policy_net: MLP
+  policy_net_kwargs:
+    hidden_size: 64
+    num_layers: 2
+  policy_lr: 0.0001
+  critic_net: MLP
+  critic_net_kwargs:
+    hidden_size: 64
+    num_layers: 2
+  critic_lr: 0.001
+  discount: 0.99
+  soft_update_tau: 0.001
