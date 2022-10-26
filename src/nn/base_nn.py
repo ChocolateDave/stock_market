@@ -9,14 +9,6 @@ from torch import Tensor, nn
 
 class BaseNN(nn.Module):
 
-    @property
-    def in_feature(self) -> int:
-        raise NotImplementedError
-
-    @property
-    def out_feature(self) -> int:
-        raise NotImplementedError
-
     def forward(self, x: Tensor) -> Tensor:
         raise NotImplementedError
 

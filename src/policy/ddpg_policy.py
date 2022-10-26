@@ -7,11 +7,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Mapping, Optional, Union
+from typing import Any, Mapping, Optional
 
 import torch as th
-from src.nn.base_nn import BaseNN
-from src.nn.utils import network_resolver
+from src.nn.ddpg_nn import PolicyNet
 from src.policy.base_policy import BasePolicy
 from torch import Tensor, nn
 from torch.distributions import Distribution
@@ -59,8 +58,6 @@ class DDPGPolicy(BasePolicy, nn.Module):
                  observation_size: int,
                  action_size: int,
                  discrete_action: bool = False,
-                 policy_net: Optional[Union[str, BaseNN]] = "mlp",
-                 policy_net_kwargs: Optional[Mapping[str, Any]] = None,
                  device: th.device = th.device('cpu'),
                  learning_rate: float = 1e-4,
                  soft_update_tau: Optional[float] = None,
@@ -72,24 +69,7 @@ class DDPGPolicy(BasePolicy, nn.Module):
         self.act_size = action_size
         self.soft_update_tau = soft_update_tau
 
-        policy_net_kwargs = policy_net_kwargs or {}
-        if isinstance(policy_net, BaseNN):
-            assert policy_net.in_feature == observation_size and \
-                policy_net.out_feature == action_size, ValueError(
-                    "Expect policy network to have `in_feature` == "
-                    "`observation_size` and `out_feature` == "
-                    "`action_size`. But got "
-                    f"{policy_net.in_feature:d} and {policy_net.out_feature:d}"
-                )
-            self.policy_net = policy_net.to(device)
-        else:
-            # Enforce input/output feature
-            policy_net_kwargs['in_feature'] = observation_size
-            policy_net_kwargs['out_feature'] = action_size
-            self.policy_net = network_resolver(
-                policy_net, **policy_net_kwargs
-            )
-            self.policy_net = self.policy_net.to(device)
+        self.policy_net = PolicyNet(observation_size, action_size).to(device)
         self.target_policy_net = deepcopy(self.policy_net).to(device)
 
         self.optimizer = th.optim.Adam(self.policy_net.parameters(),
@@ -119,7 +99,6 @@ class DDPGPolicy(BasePolicy, nn.Module):
         actions: Tensor = self.forward(obs, target)
 
         if self.discrete_action:
-            actions = nn.functional.softmax(actions, dim=-1)
             if explore:
                 # Random sample from discrete action space with gumbel noise
                 actions = nn.functional.gumbel_softmax(actions, hard=True)

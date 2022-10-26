@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from typing import Any, Mapping
+from typing import Any, List, Mapping
 
 import gym
 import torch as th
@@ -46,8 +46,8 @@ if __name__ == '__main__':
     # Allocate device
     if args['gpu']:
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-        config["trainer"]["device"] = th.device('cuda')
-        if len(args['gpu_id']) > 1:
+        config["Trainer"]["device"] = th.device('cuda')
+        if isinstance(args['gpu_id'], List):
             config["_parallel"] = True
             os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(args.gpu)
         else:
