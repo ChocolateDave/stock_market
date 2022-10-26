@@ -53,13 +53,8 @@ class DDPGCritic(BaseCritic):
 
     def sync(self, non_blocking: bool = False) -> None:
         if self.soft_update_tau is None:
-            # Hard update
-            with th.no_grad():
-                for param, target_param in zip(
-                    self.critic_net.parameters(),
-                    self.target_critic_net.parameters()
-                ):
-                    target_param.data.copy_(param.data)
+            self.target_critic_net.hard_update(self.critic_net,
+                                               non_blocking)
         else:
             self.target_critic_net.soft_update(self.critic_net,
                                                self.soft_update_tau,

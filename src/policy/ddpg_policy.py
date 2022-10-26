@@ -6,6 +6,7 @@
 """Deep Deterministic Policy module."""
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 from typing import Any, Mapping, Optional
 
@@ -26,7 +27,8 @@ class OUNoise:
                  mu: float = 0.0,
                  scale: float = 0.1,
                  theta: float = 0.15,
-                 sigma: float = 0.2) -> None:
+                 sigma: float = 0.2,
+                 dt: float = 1e-2) -> None:
         super().__init__()
 
         self.action_size = action_size
@@ -34,21 +36,23 @@ class OUNoise:
         self.scale = scale
         self.theta = theta
         self.sigma = sigma
+        self.dt = dt
 
         self.reset()
 
     def sample(self) -> np.ndarray:
 
         x = self.state
-        dx = self.theta * (self.mu - x) + \
-            self.sigma * np.random.randn(len(x))
+        dx = self.theta * (self.mu - x) * self.dt + \
+            math.sqrt(self.dt) * self.sigma * \
+                np.random.normal(size=self.action_size)
         self.state = x + dx
         noise = self.state * self.scale
 
         return noise
 
     def reset(self) -> None:
-        self.state = np.ones(self.action_size) * self.mu
+        self.state = np.zeros(self.action_size)
 
 
 class DDPGPolicy(BasePolicy, nn.Module):
@@ -95,24 +99,22 @@ class DDPGPolicy(BasePolicy, nn.Module):
                    obs: Tensor,
                    explore: bool = True,
                    target: bool = False) -> Tensor:
-        actions: Tensor = self.forward(obs, target)
+        acs: Tensor = self.forward(obs, target)
 
         if self.discrete_action:
             if explore:
                 # Random sample from discrete action space with gumbel noise
-                actions = nn.functional.gumbel_softmax(actions, hard=True)
+                acs = nn.functional.gumbel_softmax(acs, hard=True)
             else:
-                actions = (actions == actions.max(1, keepdim=True)[0]).float()
+                acs = (acs == acs.max(1, keepdim=True)[0]).float()
 
         else:
-            actions = nn.functional.tanh(actions)
             if explore:
                 # Explore continous action space with OUNoise
-                actions += th.from_numpy(
-                    self.exploration.sample()).to(actions.device)
-            actions.clamp(-1, 1)
+                acs += th.from_numpy(self.exploration.sample()).to(acs.device)
+            acs = acs.clamp(min=-1.0, max=1.0)
 
-        return actions
+        return acs
 
     def reset_noise(self) -> None:
         if not self.discrete_action:
@@ -126,16 +128,12 @@ class DDPGPolicy(BasePolicy, nn.Module):
 
     def sync(self, non_blocking: bool = False) -> None:
         if self.soft_update_tau is None:
-            # Hard update
-            with th.no_grad():
-                for param, target_param in zip(
-                    self.policy_net.parameters(),
-                    self.target_policy_net.parameters()
-                ):
-                    target_param.data.copy_(param.data)
+            self.target_policy_net.hard_update(self.policy_net,
+                                               non_blocking=non_blocking)
         else:
-            self.target_policy_net.soft_update(
-                self.policy_net, self.soft_update_tau, non_blocking)
+            self.target_policy_net.soft_update(self.policy_net,
+                                               self.soft_update_tau,
+                                               non_blocking=non_blocking)
 
 
 class EnsenmbledDDPGPolicy(BasePolicy):

@@ -25,7 +25,7 @@ class DDPGAgent(BaseAgent):
                  critic_lr: Optional[float] = None,
                  discount: Optional[float] = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
-                 soft_update_tau: Optional[float] = 0.02,
+                 soft_update_tau: Optional[float] = 0.001,
                  **kwargs) -> None:
         super().__init__()
 

@@ -38,7 +38,8 @@ class DDPGTrainer(BaseTrainer):
                  discount: Optional[float] = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
                  soft_update_tau: Optional[float] = 0.9,
-                 max_episode_steps: Optional[int] = None) -> None:
+                 max_episode_steps: Optional[int] = None,
+                 seed: int = 42) -> None:
         super().__init__(log_dir, num_episodes, name, max_episode_steps)
 
         # Retreive observation and action size
@@ -70,8 +71,10 @@ class DDPGTrainer(BaseTrainer):
         self.batch_size = batch_size
         self.buffer = ReplayBuffer(max_size=buffer_size)
         self.env = env
+        self.seed = seed
 
-    def train_one_episode(self, epoch: int) -> Any:
+    def train_one_episode(self, epoch: int, seed: Optional[int] = None) -> Any:
+        seed = seed or self.seed
         log = defaultdict(list)
 
         # Initialize random process
@@ -79,7 +82,7 @@ class DDPGTrainer(BaseTrainer):
 
         # Receive the initial state
         steps: int = 0
-        ob = self.env.reset()  # TODO: seeding?
+        ob = self.env.reset(seed=seed)
 
         while True:
             with th.no_grad():
@@ -91,7 +94,8 @@ class DDPGTrainer(BaseTrainer):
                     ac_loc = ac.float().cpu().numpy()
                 next_ob, rew, done, _, _ = self.env.step(ac_loc[0])
                 self.buffer.add_transition(
-                    ob, ac.cpu().numpy()[0], next_ob, rew, done)
+                    ob, ac.cpu().numpy()[0], next_ob, rew, done
+                )
                 log['episode_returns'].append(rew)
                 steps += 1
 
