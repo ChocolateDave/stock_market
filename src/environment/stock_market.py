@@ -77,7 +77,7 @@ class StockMarketEnv(gym.Env):
         self.action_space = TupleSpace(
             (Box(low=1.0, # Prices, no log
                  high=float("inf"),
-                 shape=(self.num_agents)),
+                 shape=(self.num_agents,)),
              TupleSpace([Discrete(2 * max_shares + 1, start=-max_shares) for i in range(self.num_agents)])) # Shares to put up
         ) # 2 * max_shares + 1 for negative shares, and for 0 shares.
         self._seed = seed
