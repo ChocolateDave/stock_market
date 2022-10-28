@@ -42,17 +42,21 @@ class OUNoise:
 
     def sample(self) -> np.ndarray:
 
+        #x = self.state
+        #dx = self.theta * (self.mu - x) * self.dt + \
+        #    math.sqrt(self.dt) * self.sigma * \
+        #        np.random.normal(size=self.action_size)
+        #self.state = x + dx
+        #noise = self.state * self.scale
         x = self.state
-        dx = self.theta * (self.mu - x) * self.dt + \
-            math.sqrt(self.dt) * self.sigma * \
-                np.random.normal(size=self.action_size)
+        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
         self.state = x + dx
-        noise = self.state * self.scale
+        return self.state
 
         return noise
 
     def reset(self) -> None:
-        self.state = np.zeros(self.action_size)
+        self.state = np.ones(self.action_size) * self.mu
 
 
 class DDPGPolicy(BasePolicy, nn.Module):
@@ -75,9 +79,7 @@ class DDPGPolicy(BasePolicy, nn.Module):
         self.policy_net = PolicyNet(observation_size, action_size).to(device)
         self.target_policy_net = deepcopy(self.policy_net).to(device)
 
-        self.optimizer = th.optim.Adam(self.policy_net.parameters(),
-                                       lr=learning_rate,
-                                       **(optimizer_kwargs or {}))
+        self.target_policy_net.hard_update(self.policy_net, False)
 
         # Exploration
         self.discrete_action = discrete_action

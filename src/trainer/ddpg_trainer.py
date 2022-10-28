@@ -39,6 +39,9 @@ class DDPGTrainer(BaseTrainer):
                  grad_clip: Optional[Tuple[float, float]] = None,
                  soft_update_tau: Optional[float] = 0.9,
                  max_episode_steps: Optional[int] = None,
+                 policy_update_num_steps: Optional[int] = 1,
+                 critic_update_frequency: Optional[int] = 1,
+                 target_update_frequency: Optional[int] = 1,
                  seed: int = 42) -> None:
         super().__init__(log_dir, num_episodes, name, max_episode_steps)
 
@@ -71,6 +74,9 @@ class DDPGTrainer(BaseTrainer):
         self.batch_size = batch_size
         self.buffer = ReplayBuffer(max_size=buffer_size)
         self.env = env
+        self.policy_update_num_steps = policy_update_num_steps
+        self.critic_update_frequency = critic_update_frequency
+        self.target_update_frequency = target_update_frequency
         self.seed = seed
 
     def train_one_episode(self, epoch: int, seed: Optional[int] = None) -> Any:
@@ -84,8 +90,11 @@ class DDPGTrainer(BaseTrainer):
         steps: int = 0
         ob = self.env.reset(seed=seed)
 
+
         while True:
             with th.no_grad():
+                self.agent.eval_mode()
+
                 ac = self.agent.get_action(ob, explore=True, target=False)
                 if self.discrete_action:
                     # convert one-hot to integer
@@ -100,8 +109,10 @@ class DDPGTrainer(BaseTrainer):
                 steps += 1
 
             if len(self.buffer) > self.batch_size:
+                self.agent.train_mode()
+
                 obs, acs, next_obs, rews, dones = self.buffer.sample(
-                    self.batch_size
+                    self.batch_size, random=True
                 )
                 obs = th.from_numpy(obs).to(self.agent.device)
                 acs = th.from_numpy(acs).to(self.agent.device)
@@ -110,15 +121,18 @@ class DDPGTrainer(BaseTrainer):
                 dones = th.from_numpy(dones).to(self.agent.device)
 
                 # Update critic network
+                #if epoch % self.critic_update_frequency:
                 critic_loss = self.agent.update_critic(
                     obs, acs, next_obs, rews, dones)
                 log['critic_loss'].append(critic_loss)
 
                 # Update policy network
+                #for policy_step in range(self.policy_update_num_steps):
                 policy_loss = self.agent.update_policy(obs)
                 log['policy_loss'].append(policy_loss)
 
                 # Update target networks
+                #if epoch % self.target_update_frequency:
                 self.agent.update_target()
 
             if self.max_episode_steps:
@@ -130,5 +144,37 @@ class DDPGTrainer(BaseTrainer):
                         else sum(value) / steps
                         for key, value in log.items()}
 
-    def exec_one_epoch(self, epoch: int = -1) -> Any:
-        raise NotImplementedError
+    def exec_one_epoch(self, epoch: int = -1, seed: Optional[int] = None) -> Any:
+        seed = seed or self.seed
+        log = defaultdict(list)
+
+        # Receive the initial state
+        steps: int = 0
+        ob = self.env.reset(seed=seed)
+        actions_taken = []
+
+        self.agent.eval_mode()
+
+        while True:
+            with th.no_grad():
+                ac = self.agent.get_action(ob, explore=False, target=False)
+                if self.discrete_action:
+                    # convert one-hot to integer
+                    ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
+                else:
+                    ac_loc = ac.float().cpu().numpy()
+                actions_taken.append(ac_loc[0])
+                ob, rew, done, _, _ = self.env.step(ac_loc[0])
+                
+                log['eval_returns'].append(rew)
+                steps += 1
+                print(actions_taken)
+
+            if self.max_episode_steps:
+                done = steps > self.max_episode_steps or done
+
+            if done:
+                return {key: sum(value)
+                        if key == 'eval_returns'
+                        else sum(value) / steps
+                        for key, value in log.items()}

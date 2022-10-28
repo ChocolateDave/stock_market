@@ -38,10 +38,12 @@ class BaseTrainer:
                  log_dir: _PathLike,
                  num_episodes: int,
                  name: str = '',
-                 max_episode_steps: Optional[int] = None) -> None:
+                 max_episode_steps: Optional[int] = None,
+                 eval_frequency: Optional[int] = 50) -> None:
 
         self.num_episodes = num_episodes
         self.max_episode_steps = max_episode_steps
+        self.eval_frequency = eval_frequency
 
         now = datetime.now().strftime('%m-%d-%d_%H-%M-%S')
         log_dir = osp.join(log_dir, f'{name:s}_{now:s}')
@@ -62,7 +64,7 @@ class BaseTrainer:
                 key = 'Train/' + key
                 self.writer.add_scalar(key, val, episode)
 
-            if execution:
+            if episode % self.eval_frequency == 0 and execution:
                 self.set_eval()
                 log = self.exec_one_epoch(episode)
                 for key, val in log.items():

@@ -36,6 +36,8 @@ class DDPGCritic(BaseCritic):
         self.critic_net = CriticNet(observation_size, action_size).to(device)
         self.target_critic_net = deepcopy(self.critic_net).to(device)
 
+        self.target_critic_net.hard_update(self.critic_net, False)
+
     def forward(self,
                 obs: Tensor,
                 acs: Tensor,
