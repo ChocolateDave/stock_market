@@ -11,12 +11,14 @@ from typing import Any, List, Mapping
 
 import gym
 import torch as th
+from gym.wrappers import RescaleAction
 from src.trainer.ddpg_trainer import DDPGTrainer
 from src.utils import load_config
 
 
 def main(args: Mapping[str, Any]) -> None:
     env = gym.make(**args['Env'])
+    env = RescaleAction(env)
     trainer = DDPGTrainer(env, **args['Trainer'])
     trainer.train(args['execute_at_train'])
 
@@ -41,7 +43,7 @@ if __name__ == '__main__':
     config = load_config(args['config'])
     for key, val in args.items():
         if val is not None:
-            config[key] = val
+            config['Trainer'][key] = val
 
     # Allocate device
     if args['gpu']:

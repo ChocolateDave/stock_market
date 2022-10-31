@@ -6,7 +6,7 @@
 """Vanilla Replay Buffer Module"""
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Sequence, Tuple
 
 import numpy as np
 from src.memory.base_buffer import BaseBuffer, Path
@@ -42,7 +42,9 @@ class ReplayBuffer(BaseBuffer):
             self.rewards = np.concatenate([self.rewards, r])[-self.max_size:]
             self.dones = np.concatenate([self.dones, d])[-self.max_size:]
 
-    def sample(self, batch_size: int, random=False) -> Sequence[Path]:
+    def sample(self,
+               batch_size: int,
+               random: bool = False) -> Tuple[np.ndarray, ...]:
         assert (
             self.observations.shape[0] ==
             self.actions.shape[0] ==
@@ -70,3 +72,6 @@ class ReplayBuffer(BaseBuffer):
                 cntr += recent_sample.length
                 idx -= 1
             return convert_sequence_of_paths(self.paths[idx:])
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__} ({len(self):d})'

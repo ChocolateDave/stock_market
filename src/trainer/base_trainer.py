@@ -24,9 +24,6 @@ _logger = logging.getLogger(__name__)
 
 
 class BaseTrainer:
-    agent: BaseAgent
-    buffer: BaseBuffer
-    env: Env
 
     def train_one_episode(self, epoch: int) -> Mapping[str, Any]:
         raise NotImplementedError
@@ -35,13 +32,16 @@ class BaseTrainer:
         raise NotImplementedError
 
     def __init__(self,
-                 log_dir: _PathLike,
-                 num_episodes: int,
-                 name: str = '',
-                 max_episode_steps: Optional[int] = None) -> None:
+                 log_dir: _PathLike = 'logs/',
+                 max_episode_steps: Optional[int] = None,
+                 num_episodes: int = 1,
+                 num_warm_up_steps: int = 0,
+                 name: str = '') -> None:
 
-        self.num_episodes = num_episodes
         self.max_episode_steps = max_episode_steps
+        self.num_episodes = num_episodes or 1
+        self.num_warm_up_steps = num_warm_up_steps
+        self.train_step: int = 0
 
         now = datetime.now().strftime('%m-%d-%d_%H-%M-%S')
         log_dir = osp.join(log_dir, f'{name:s}_{now:s}')
@@ -53,7 +53,6 @@ class BaseTrainer:
                             desc='Training Progress',
                             position=0,
                             leave=False):
-            self.set_train()
 
             log = self.train_one_episode(episode)
             # Update episodic tracker
@@ -68,9 +67,3 @@ class BaseTrainer:
                 for key, val in log.items():
                     key = 'Execution/' + key
                     self.writer.add_scalar(key, val, episode)
-
-    def set_train(self) -> None:
-        self.agent.set_train()
-
-    def set_eval(self) -> None:
-        self.agent.set_eval()

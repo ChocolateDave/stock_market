@@ -16,8 +16,12 @@ from torch import Tensor, optim
 class DDPGAgent(BaseAgent):
 
     def __init__(self,
-                 observation_size: int,
-                 action_size: int,
+                 observation_size: Optional[int] = None,
+                 critic_observation_size: Optional[int] = None,
+                 policy_observation_size: Optional[int] = None,
+                 action_size: Optional[int] = None,
+                 critic_action_size: Optional[int] = None,
+                 policy_action_size: Optional[int] = None,
                  discrete_action: bool = False,
                  device: Optional[th.device] = None,
                  learning_rate: Optional[float] = 1e-4,
@@ -31,8 +35,8 @@ class DDPGAgent(BaseAgent):
 
         self.device = device
         self.policy: DDPGPolicy = DDPGPolicy(
-            observation_size=observation_size,
-            action_size=action_size,
+            observation_size=observation_size or policy_observation_size,
+            action_size=action_size or policy_action_size,
             discrete_action=discrete_action,
             device=device,
             learning_rate=policy_lr or learning_rate,
@@ -44,8 +48,8 @@ class DDPGAgent(BaseAgent):
         )
 
         self.critic: DDPGCritic = DDPGCritic(
-            observation_size=observation_size,
-            action_size=action_size,
+            observation_size=observation_size or critic_observation_size,
+            action_size=action_size or critic_action_size,
             device=device,
             discount=discount,
             learning_rate=critic_lr or learning_rate,
@@ -67,6 +71,7 @@ class DDPGAgent(BaseAgent):
                       obs: Tensor,
                       acs: Tensor,
                       next_obs: Tensor,
+                      next_acs: Optional[Tensor],
                       rews: Tensor,
                       dones: Tensor) -> float:
         # Shape issue
@@ -76,12 +81,12 @@ class DDPGAgent(BaseAgent):
             dones = dones.view(-1, 1)
 
         # Bellman error target
-        with th.no_grad():
+        if next_acs is None:
             next_acs = self.policy.get_action(next_obs,
                                               explore=False,
                                               target=True)
-            target = rews + self.critic.discount * (1. - dones) * \
-                self.critic.forward(next_obs, next_acs, target=True)
+        target = rews + self.critic.discount * (1. - dones) * \
+            self.critic.forward(next_obs, next_acs, target=True).detach()
         Q_vals = self.critic.forward(obs, acs, target=False)
         critic_loss = self.critic.loss(Q_vals, target.detach())
 
@@ -91,8 +96,11 @@ class DDPGAgent(BaseAgent):
 
         return critic_loss.item()
 
-    def update_policy(self, obs: Tensor) -> float:
-        acs = self.policy.get_action(obs, explore=False, target=False)
+    def update_policy(self,
+                      obs: Tensor,
+                      acs: Optional[Tensor] = None) -> float:
+        if acs is None:
+            acs = self.policy.get_action(obs, explore=False, target=False)
 
         policy_loss = -self.critic.forward(obs, acs).mean()
 

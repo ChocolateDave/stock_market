@@ -52,8 +52,15 @@ class BaseBuffer:
                        done: ndarray,
                        noised: bool = False) -> None:
 
+        if isinstance(ac, int):
+            action = np.asarray([ac], dtype='float32')
+        elif isinstance(ac, ndarray) and len(ac.shape) == 1:
+            action = ac[None, ...]
+        else:
+            action = ac
+
         path = Path(observation=np.asarray([ob], dtype='float32'),
-                    action=np.asarray([ac], dtype='float32'),
+                    action=action,
                     next_observation=np.asarray([next_ob], dtype='float32'),
                     reward=np.asarray([rew], dtype='float32'),
                     done=np.asarray([done], dtype='int64'))

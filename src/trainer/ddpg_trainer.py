@@ -7,14 +7,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Mapping, Optional, Tuple, Union
+from typing import Any, Optional, Tuple
 
 import torch as th
 from gym.core import Env
 from gym.spaces import Discrete
 from src.agent.ddpg_agent import DDPGAgent
 from src.memory.replay_buffer import ReplayBuffer
-from src.nn.base_nn import BaseNN
 from src.trainer.base_trainer import BaseTrainer
 
 
@@ -28,10 +27,6 @@ class DDPGTrainer(BaseTrainer):
                  log_dir: str = 'logs/',
                  num_episodes: int = 20000,
                  name: str = '',
-                 policy_net: Optional[Union[str, BaseNN]] = 'MLP',
-                 policy_net_kwargs: Optional[Mapping[str, Any]] = None,
-                 critic_net: Optional[Union[str, BaseNN]] = 'MLP',
-                 critic_net_kwargs: Optional[Mapping[str, Any]] = None,
                  learning_rate: Optional[float] = 1e-4,
                  policy_lr: Optional[float] = None,
                  critic_lr: Optional[float] = None,
@@ -39,7 +34,8 @@ class DDPGTrainer(BaseTrainer):
                  grad_clip: Optional[Tuple[float, float]] = None,
                  soft_update_tau: Optional[float] = 0.9,
                  max_episode_steps: Optional[int] = None,
-                 seed: int = 42) -> None:
+                 seed: int = 42,
+                 **kwargs) -> None:
         super().__init__(log_dir, num_episodes, name, max_episode_steps)
 
         # Retreive observation and action size
@@ -58,11 +54,7 @@ class DDPGTrainer(BaseTrainer):
                                           action_size=action_size,
                                           discrete_action=self.discrete_action,
                                           device=device,
-                                          policy_net=policy_net,
-                                          policy_net_kwargs=policy_net_kwargs,
                                           policy_lr=policy_lr,
-                                          critic_net=critic_net,
-                                          critic_net_kwargs=critic_net_kwargs,
                                           learning_rate=learning_rate,
                                           critic_lr=critic_lr,
                                           discount=discount,
@@ -72,6 +64,7 @@ class DDPGTrainer(BaseTrainer):
         self.buffer = ReplayBuffer(max_size=buffer_size)
         self.env = env
         self.seed = seed
+        self.env.reset(seed=self.seed)
 
     def train_one_episode(self, epoch: int, seed: Optional[int] = None) -> Any:
         seed = seed or self.seed
@@ -82,7 +75,7 @@ class DDPGTrainer(BaseTrainer):
 
         # Receive the initial state
         steps: int = 0
-        ob = self.env.reset(seed=seed)
+        ob = self.env.reset()
 
         while True:
             with th.no_grad():
@@ -130,5 +123,5 @@ class DDPGTrainer(BaseTrainer):
                         else sum(value) / steps
                         for key, value in log.items()}
 
-    def exec_one_epoch(self, epoch: int = -1) -> Any:
+    def exec_one_episode(self, epoch: int = -1) -> Any:
         raise NotImplementedError
