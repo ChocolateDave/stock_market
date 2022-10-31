@@ -25,7 +25,9 @@ class DDPGTrainer(BaseTrainer):
                  batch_size: int = 64,
                  device: th.device = th.device('cpu'),
                  log_dir: str = 'logs/',
+                 eval_frequency: int = 1000,
                  num_episodes: int = 20000,
+                 num_warm_up_steps: int = 1000,
                  name: str = '',
                  learning_rate: Optional[float] = 1e-4,
                  policy_lr: Optional[float] = None,
@@ -36,7 +38,8 @@ class DDPGTrainer(BaseTrainer):
                  max_episode_steps: Optional[int] = None,
                  seed: int = 42,
                  **kwargs) -> None:
-        super().__init__(log_dir, num_episodes, name, max_episode_steps)
+        super().__init__(log_dir, max_episode_steps, num_episodes,
+                         num_warm_up_steps, name, eval_frequency)
 
         # Retreive observation and action size
         if len(env.observation_space.shape) > 2:
@@ -71,7 +74,7 @@ class DDPGTrainer(BaseTrainer):
         log = defaultdict(list)
 
         # Initialize random process
-        self.agent.reset_noise()
+        # self.agent.reset_noise()
 
         # Receive the initial state
         steps: int = 0
@@ -79,12 +82,15 @@ class DDPGTrainer(BaseTrainer):
 
         while True:
             with th.no_grad():
+                self.agent.eval_mode()
+
                 ac = self.agent.get_action(ob, explore=True, target=False)
                 if self.discrete_action:
                     # convert one-hot to integer
                     ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
                 else:
                     ac_loc = ac.float().cpu().numpy()
+
                 next_ob, rew, done, _, _ = self.env.step(ac_loc[0])
                 self.buffer.add_transition(
                     ob, ac.cpu().numpy()[0], next_ob, rew, done
@@ -93,8 +99,10 @@ class DDPGTrainer(BaseTrainer):
                 steps += 1
 
             if len(self.buffer) > self.batch_size:
+                self.agent.train_mode()
+
                 obs, acs, next_obs, rews, dones = self.buffer.sample(
-                    self.batch_size
+                    self.batch_size, random=True
                 )
                 obs = th.from_numpy(obs).to(self.agent.device)
                 acs = th.from_numpy(acs).to(self.agent.device)
@@ -123,5 +131,37 @@ class DDPGTrainer(BaseTrainer):
                         else sum(value) / steps
                         for key, value in log.items()}
 
-    def exec_one_episode(self, epoch: int = -1) -> Any:
-        raise NotImplementedError
+    def exec_one_episode(self,
+                         episode: int = -1,
+                         seed: Optional[int] = None) -> Any:
+        seed = seed or self.seed
+        log = defaultdict(list)
+
+        # Receive the initial state
+        steps: int = 0
+        ob = self.env.reset()
+
+        self.agent.eval_mode()
+
+        while True:
+            with th.no_grad():
+                ac = self.agent.get_action(ob, explore=False, target=False)
+                if self.discrete_action:
+                    # convert one-hot to integer
+                    ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
+                else:
+                    ac_loc = ac.float().cpu().numpy()
+                ob, rew, done, _, _ = self.env.step(ac_loc[0])
+
+                log['eval_returns'].append(rew)
+                steps += 1
+                print(ac_loc[0])
+
+            if self.max_episode_steps:
+                done = steps > self.max_episode_steps or done
+
+            if done:
+                return {key: sum(value)
+                        if key == 'eval_returns'
+                        else sum(value) / steps
+                        for key, value in log.items()}

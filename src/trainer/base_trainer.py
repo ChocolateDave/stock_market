@@ -25,10 +25,10 @@ _logger = logging.getLogger(__name__)
 
 class BaseTrainer:
 
-    def train_one_episode(self, epoch: int) -> Mapping[str, Any]:
+    def train_one_episode(self, episode: int) -> Mapping[str, Any]:
         raise NotImplementedError
 
-    def exec_one_episode(self, epoch: int = -1) -> Mapping[str, Any]:
+    def exec_one_episode(self, episode: int = -1) -> Mapping[str, Any]:
         raise NotImplementedError
 
     def __init__(self,
@@ -36,12 +36,14 @@ class BaseTrainer:
                  max_episode_steps: Optional[int] = None,
                  num_episodes: int = 1,
                  num_warm_up_steps: int = 0,
-                 name: str = '') -> None:
+                 name: str = '',
+                 eval_frequency: Optional[int] = 100) -> None:
 
         self.max_episode_steps = max_episode_steps
         self.num_episodes = num_episodes or 1
         self.num_warm_up_steps = num_warm_up_steps
         self.train_step: int = 0
+        self.eval_frequency = eval_frequency
 
         now = datetime.now().strftime('%m-%d-%d_%H-%M-%S')
         log_dir = osp.join(log_dir, f'{name:s}_{now:s}')
@@ -61,7 +63,7 @@ class BaseTrainer:
                 key = 'Train/' + key
                 self.writer.add_scalar(key, val, episode)
 
-            if execution:
+            if episode % self.eval_frequency == 0 and execution:
                 self.set_eval()
                 log = self.exec_one_epoch(episode)
                 for key, val in log.items():

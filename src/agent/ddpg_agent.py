@@ -60,8 +60,11 @@ class DDPGAgent(BaseAgent):
         self.critic_opt = optim.Adam(
             self.critic.critic_net.parameters(),
             lr=critic_lr or learning_rate,
-            weight_decay=0.01
+            weight_decay=1e-6 # 0 sometimes works better
         )
+
+        print(learning_rate, policy_lr, critic_lr, self.critic_opt.param_groups[0]['lr'], self.policy_opt.param_groups[0]['lr'])
+
         self.training_step = 0
 
     def reset_noise(self) -> None:
@@ -113,6 +116,14 @@ class DDPGAgent(BaseAgent):
     def update_target(self, non_blocking: bool = False) -> None:
         self.policy.sync(non_blocking)
         self.critic.sync(non_blocking)
+
+    def train_mode(self):
+        self.policy.policy_net.train()
+        self.critic.critic_net.train()
+
+    def eval_mode(self):
+        self.policy.policy_net.eval()
+        self.critic.critic_net.eval()
 
 
 if __name__ == "__main__":

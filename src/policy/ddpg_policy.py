@@ -28,7 +28,9 @@ class OUNoise:
                  scale: float = 0.1,
                  theta: float = 0.15,
                  sigma: float = 0.2,
-                 dt: float = 1e-2) -> None:
+                 dt: float = 1,
+                 final_anneal_scale: Optional[float] = 0.02,
+                 scale_timesteps: Optional[float] = 10000) -> None: # 1e-2
         super().__init__()
 
         self.action_size = action_size
@@ -37,6 +39,8 @@ class OUNoise:
         self.theta = theta
         self.sigma = sigma
         self.dt = dt
+        self.final_anneal_scale = final_anneal_scale
+        self.scale_timesteps = scale_timesteps
 
         self.reset()
 
@@ -47,12 +51,26 @@ class OUNoise:
             math.sqrt(self.dt) * self.sigma * \
                 np.random.normal(size=self.action_size)
         self.state = x + dx
-        noise = self.state * self.scale
-
+        noise = self.state * self.scale * self.scheduled_scale()
         return noise
 
     def reset(self) -> None:
-        self.state = np.zeros(self.action_size)
+        self.state = np.ones(self.action_size) * self.mu
+        self.i = 0
+
+    def scheduled_scale(self) -> float:
+        if self.final_anneal_scale:
+            if self.i < self.scale_timesteps:
+                p = self.i / self.scale_timesteps
+                scheduled_scale = self.final_anneal_scale * p + (1. - p)
+                self.i += 1
+                return scheduled_scale
+            else:
+                self.i += 1
+                return self.final_anneal_scale
+        else:
+            return 1.
+        
 
 
 class DDPGPolicy(BasePolicy, nn.Module):
@@ -65,6 +83,7 @@ class DDPGPolicy(BasePolicy, nn.Module):
                  learning_rate: float = 1e-4,
                  soft_update_tau: Optional[float] = None,
                  optimizer_kwargs: Optional[Mapping[str, Any]] = None,
+                 random_timesteps: Optional[float] = 1000,
                  **kwargs) -> None:
         super().__init__()
 
@@ -75,9 +94,10 @@ class DDPGPolicy(BasePolicy, nn.Module):
         self.policy_net = PolicyNet(observation_size, action_size).to(device)
         self.target_policy_net = deepcopy(self.policy_net).to(device)
 
-        self.optimizer = th.optim.Adam(self.policy_net.parameters(),
-                                       lr=learning_rate,
-                                       **(optimizer_kwargs or {}))
+        self.target_policy_net.hard_update(self.policy_net, False)
+
+        self.random_timesteps = random_timesteps
+        self.random_steps_elapsed = 0
 
         # Exploration
         self.discrete_action = discrete_action
@@ -111,7 +131,11 @@ class DDPGPolicy(BasePolicy, nn.Module):
         else:
             if explore:
                 # Explore continous action space with OUNoise
-                acs += th.from_numpy(self.exploration.sample()).to(acs.device)
+                if self.random_steps_elapsed < self.random_timesteps:
+                    acs = th.from_numpy(np.random.uniform(-1, 1, size = (1, self.act_size))).to(acs.device)
+                    self.random_steps_elapsed += 1
+                else:
+                    acs += th.from_numpy(self.exploration.sample()).to(acs.device)
             acs = acs.clamp(min=-1.0, max=1.0)
 
         return acs
