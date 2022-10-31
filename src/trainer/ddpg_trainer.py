@@ -39,10 +39,8 @@ class DDPGTrainer(BaseTrainer):
                  grad_clip: Optional[Tuple[float, float]] = None,
                  soft_update_tau: Optional[float] = 0.9,
                  max_episode_steps: Optional[int] = None,
-                 policy_update_num_steps: Optional[int] = 1,
-                 critic_update_frequency: Optional[int] = 1,
-                 target_update_frequency: Optional[int] = 1,
-                 seed: int = 42) -> None:
+                 num_timesteps_before_training: Optional[int] = 500,
+                 seed: int = 2) -> None:
         super().__init__(log_dir, num_episodes, name, max_episode_steps)
 
         # Retreive observation and action size
@@ -74,21 +72,22 @@ class DDPGTrainer(BaseTrainer):
         self.batch_size = batch_size
         self.buffer = ReplayBuffer(max_size=buffer_size)
         self.env = env
-        self.policy_update_num_steps = policy_update_num_steps
-        self.critic_update_frequency = critic_update_frequency
-        self.target_update_frequency = target_update_frequency
         self.seed = seed
+
+        self.num_timesteps_before_training = num_timesteps_before_training
+
+        self.env.reset(seed=seed)
 
     def train_one_episode(self, epoch: int, seed: Optional[int] = None) -> Any:
         seed = seed or self.seed
         log = defaultdict(list)
 
         # Initialize random process
-        self.agent.reset_noise()
+        #self.agent.reset_noise()
 
         # Receive the initial state
         steps: int = 0
-        ob = self.env.reset(seed=seed)
+        ob = self.env.reset()
 
 
         while True:
@@ -101,6 +100,7 @@ class DDPGTrainer(BaseTrainer):
                     ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
                 else:
                     ac_loc = ac.float().cpu().numpy()
+
                 next_ob, rew, done, _, _ = self.env.step(ac_loc[0])
                 self.buffer.add_transition(
                     ob, ac.cpu().numpy()[0], next_ob, rew, done
@@ -108,7 +108,7 @@ class DDPGTrainer(BaseTrainer):
                 log['episode_returns'].append(rew)
                 steps += 1
 
-            if len(self.buffer) > self.batch_size:
+            if len(self.buffer) > self.num_timesteps_before_training:
                 self.agent.train_mode()
 
                 obs, acs, next_obs, rews, dones = self.buffer.sample(
@@ -121,18 +121,15 @@ class DDPGTrainer(BaseTrainer):
                 dones = th.from_numpy(dones).to(self.agent.device)
 
                 # Update critic network
-                #if epoch % self.critic_update_frequency:
                 critic_loss = self.agent.update_critic(
                     obs, acs, next_obs, rews, dones)
                 log['critic_loss'].append(critic_loss)
 
                 # Update policy network
-                #for policy_step in range(self.policy_update_num_steps):
                 policy_loss = self.agent.update_policy(obs)
                 log['policy_loss'].append(policy_loss)
 
                 # Update target networks
-                #if epoch % self.target_update_frequency:
                 self.agent.update_target()
 
             if self.max_episode_steps:
@@ -150,8 +147,7 @@ class DDPGTrainer(BaseTrainer):
 
         # Receive the initial state
         steps: int = 0
-        ob = self.env.reset(seed=seed)
-        actions_taken = []
+        ob = self.env.reset()
 
         self.agent.eval_mode()
 
@@ -163,12 +159,11 @@ class DDPGTrainer(BaseTrainer):
                     ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
                 else:
                     ac_loc = ac.float().cpu().numpy()
-                actions_taken.append(ac_loc[0])
                 ob, rew, done, _, _ = self.env.step(ac_loc[0])
                 
                 log['eval_returns'].append(rew)
                 steps += 1
-                print(actions_taken)
+                print(ac_loc[0])
 
             if self.max_episode_steps:
                 done = steps > self.max_episode_steps or done

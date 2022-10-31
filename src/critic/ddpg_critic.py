@@ -22,7 +22,8 @@ class DDPGCritic(BaseCritic):
                  discount: float = 0.99,
                  learning_rate: float = 1e-4,
                  soft_update_tau: Optional[float] = None,
-                 grad_clip: Optional[float] = None) -> None:
+                 grad_clip: Optional[float] = None,
+                 huber_loss: bool = True) -> None:
         super().__init__()
 
         self.obs_size = observation_size
@@ -31,7 +32,10 @@ class DDPGCritic(BaseCritic):
         self.learning_rate = learning_rate
         self.soft_update_tau = soft_update_tau
         self.grad_clip = grad_clip
-        self.loss = nn.MSELoss()
+        if huber_loss:
+            self.loss = nn.HuberLoss()
+        else:
+            self.loss = nn.MSELoss()
 
         self.critic_net = CriticNet(observation_size, action_size).to(device)
         self.target_critic_net = deepcopy(self.critic_net).to(device)

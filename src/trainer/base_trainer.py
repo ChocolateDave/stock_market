@@ -39,7 +39,7 @@ class BaseTrainer:
                  num_episodes: int,
                  name: str = '',
                  max_episode_steps: Optional[int] = None,
-                 eval_frequency: Optional[int] = 50) -> None:
+                 eval_frequency: Optional[int] = 100) -> None:
 
         self.num_episodes = num_episodes
         self.max_episode_steps = max_episode_steps
