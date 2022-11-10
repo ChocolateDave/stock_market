@@ -18,6 +18,44 @@ from torch import Tensor, nn
 from torch.distributions import Distribution
 
 
+class OrnsteinUhlenbeckProcess:
+    def __init__(self, size, theta=0.15, mu=0., sigma=0.2, dt=1e-2, x0=None, sigma_min=None, n_steps_annealing=1000):
+        self.theta = theta
+        self.dt = dt
+        self.x0 = x0
+        self.size = size
+        self.mu = mu
+        self.sigma = sigma
+        self.n_steps = 0
+
+        if sigma_min is not None:
+            self.m = -float(sigma - sigma_min) / float(n_steps_annealing)
+            self.c = sigma
+            self.sigma_min = sigma_min
+        else:
+            self.m = 0.
+            self.c = sigma
+            self.sigma_min = sigma
+
+        self.reset()
+
+    def sample(self):
+        x = self.x_prev + self.theta * (self.mu - self.x_prev) * \
+            self.dt + self.current_sigma * np.sqrt(self.dt) * \
+            np.random.normal(size=self.size)
+        self.x_prev = x
+        self.n_steps += 1
+        return x
+
+    def reset(self):
+        self.x_prev = self.x0 if self.x0 is not None else np.zeros(self.size)
+    
+    @property
+    def current_sigma(self):
+        sigma = max(self.sigma_min, self.m * float(self.n_steps) + self.c)
+        return sigma
+
+
 # Ornstein-Uhlenbeck Noise for continous random exploration
 # https://github.com/songrotek/DDPG/blob/master/ou_noise.py
 # =========================================================
@@ -28,9 +66,9 @@ class OUNoise:
                  scale: float = 0.1,
                  theta: float = 0.15,
                  sigma: float = 0.2,
-                 dt: float = 1,
+                 dt: float = 1e-2, # 1e-2
                  final_anneal_scale: Optional[float] = 0.02,
-                 scale_timesteps: Optional[float] = 10000) -> None: # 1e-2
+                 scale_timesteps: Optional[float] = 10000) -> None: 
         super().__init__()
 
         self.action_size = action_size
@@ -99,12 +137,15 @@ class DDPGPolicy(BasePolicy, nn.Module):
         self.random_timesteps = random_timesteps
         self.random_steps_elapsed = 0
 
+        self.delta_eps = 1. / 50000
+        self.eps = 1.0
+
         # Exploration
         self.discrete_action = discrete_action
         if discrete_action:
             self.exploration = 0.3  # epsilon-greedy initial value
         else:
-            self.exploration = OUNoise(action_size)
+            self.exploration = OrnsteinUhlenbeckProcess(action_size)
 
     def forward(self, obs: Tensor, target: bool = False) -> Distribution:
         if len(obs.shape) == 1:
@@ -131,11 +172,9 @@ class DDPGPolicy(BasePolicy, nn.Module):
         else:
             if explore:
                 # Explore continous action space with OUNoise
-                if self.random_steps_elapsed < self.random_timesteps:
-                    acs = th.from_numpy(np.random.uniform(-1, 1, size = (1, self.act_size))).to(acs.device)
-                    self.random_steps_elapsed += 1
-                else:
-                    acs += th.from_numpy(self.exploration.sample()).to(acs.device)
+                acs += th.from_numpy(max(self.eps, 0) * 
+                    self.exploration.sample()).to(acs.device)
+                self.eps -= self.delta_eps
             acs = acs.clamp(min=-1.0, max=1.0)
 
         return acs

@@ -39,11 +39,12 @@ class BaseTrainer:
                  num_episodes: int,
                  name: str = '',
                  max_episode_steps: Optional[int] = None,
-                 eval_frequency: Optional[int] = 100) -> None:
+                 eval_frequency: Optional[int] = 10) -> None:
 
         self.num_episodes = num_episodes
         self.max_episode_steps = max_episode_steps
         self.eval_frequency = eval_frequency
+        self.steps_so_far = 0
 
         now = datetime.now().strftime('%m-%d-%d_%H-%M-%S')
         log_dir = osp.join(log_dir, f'{name:s}_{now:s}')
@@ -63,10 +64,15 @@ class BaseTrainer:
             for key, val in meter.items():
                 key = 'Train/' + key
                 self.writer.add_scalar(key, val, episode)
-
+            #print('steps:', self.steps_so_far)
             if episode % self.eval_frequency == 0 and execution:
                 self.set_eval()
-                log = self.exec_one_epoch(episode)
+                mean_reward = 0.
+                for i in range(20):
+                    log = self.exec_one_epoch(episode)
+                    mean_reward += log['eval_returns']
+                log = {'mean_reward': mean_reward / 20}
+                #print('log:', log)
                 for key, val in log.items():
                     key = 'Execution/' + key
                     self.writer.add_scalar(key, val, episode)

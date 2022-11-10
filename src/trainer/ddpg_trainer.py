@@ -32,15 +32,15 @@ class DDPGTrainer(BaseTrainer):
                  policy_net_kwargs: Optional[Mapping[str, Any]] = None,
                  critic_net: Optional[Union[str, BaseNN]] = 'MLP',
                  critic_net_kwargs: Optional[Mapping[str, Any]] = None,
-                 learning_rate: Optional[float] = 1e-4,
+                 learning_rate: Optional[float] = None,
                  policy_lr: Optional[float] = None,
                  critic_lr: Optional[float] = None,
                  discount: Optional[float] = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
                  soft_update_tau: Optional[float] = 0.9,
                  max_episode_steps: Optional[int] = None,
-                 num_timesteps_before_training: Optional[int] = 500,
-                 seed: int = 2) -> None:
+                 num_timesteps_before_training: Optional[int] = 100,
+                 seed: int = -1) -> None:
         super().__init__(log_dir, num_episodes, name, max_episode_steps)
 
         # Retreive observation and action size
@@ -76,39 +76,48 @@ class DDPGTrainer(BaseTrainer):
 
         self.num_timesteps_before_training = num_timesteps_before_training
 
-        self.env.reset(seed=seed)
+        if seed > 0:
+            self.env.reset(seed=seed)
 
     def train_one_episode(self, epoch: int, seed: Optional[int] = None) -> Any:
         seed = seed or self.seed
         log = defaultdict(list)
 
         # Initialize random process
-        #self.agent.reset_noise()
+        self.agent.reset_noise()
 
         # Receive the initial state
         steps: int = 0
         ob = self.env.reset()
 
-
         while True:
             with th.no_grad():
                 self.agent.eval_mode()
 
-                ac = self.agent.get_action(ob, explore=True, target=False)
-                if self.discrete_action:
-                    # convert one-hot to integer
-                    ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
+                if self.steps_so_far < self.num_timesteps_before_training:
+                    ac = self.env.action_space.sample()
+                    ac_loc = [ac]
                 else:
-                    ac_loc = ac.float().cpu().numpy()
+                    ac = self.agent.get_action(ob, explore=True, target=False)
+                    if self.discrete_action:
+                        # convert one-hot to integer
+                        ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
+                    else:
+                        ac_loc = ac.float().cpu().numpy()
+                    ac = ac.cpu().numpy()[0]
 
-                next_ob, rew, done, _, _ = self.env.step(ac_loc[0])
+                next_ob, rew, done, truncated, _ = self.env.step(ac_loc[0])
                 self.buffer.add_transition(
-                    ob, ac.cpu().numpy()[0], next_ob, rew, done
+                    ob, ac, next_ob, rew, done
                 )
                 log['episode_returns'].append(rew)
                 steps += 1
+                self.steps_so_far += 1
+                ob = next_ob
+                done = done or truncated
 
-            if len(self.buffer) > self.num_timesteps_before_training:
+            if self.steps_so_far > self.num_timesteps_before_training and \
+                len(self.buffer) > self.batch_size:
                 self.agent.train_mode()
 
                 obs, acs, next_obs, rews, dones = self.buffer.sample(
@@ -133,7 +142,7 @@ class DDPGTrainer(BaseTrainer):
                 self.agent.update_target()
 
             if self.max_episode_steps:
-                done = steps > self.max_episode_steps or done
+                done = done or steps > self.max_episode_steps
 
             if done:
                 return {key: sum(value)
@@ -159,11 +168,12 @@ class DDPGTrainer(BaseTrainer):
                     ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
                 else:
                     ac_loc = ac.float().cpu().numpy()
-                ob, rew, done, _, _ = self.env.step(ac_loc[0])
+                ob, rew, done, truncated, _ = self.env.step(ac_loc[0])
+                done = done or truncated
                 
                 log['eval_returns'].append(rew)
                 steps += 1
-                print(ac_loc[0])
+                #print(ac_loc[0])
 
             if self.max_episode_steps:
                 done = steps > self.max_episode_steps or done
