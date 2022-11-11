@@ -21,6 +21,8 @@ _logger = logging.getLogger(__name__)
 
 
 class BaseTrainer:
+    def explore(self) -> None:
+        raise NotImplementedError
 
     def train_one_episode(self, episode: int) -> Mapping[str, Any]:
         raise NotImplementedError
@@ -32,7 +34,7 @@ class BaseTrainer:
                  log_dir: _PathLike = 'logs/',
                  max_episode_steps: Optional[int] = None,
                  num_episodes: int = 1,
-                 num_warm_up_steps: int = 0,
+                 num_warm_up_steps: Optional[int] = None,
                  name: str = '',
                  eval_frequency: Optional[int] = 100) -> None:
 
@@ -40,8 +42,8 @@ class BaseTrainer:
         self.num_episodes = num_episodes or 1
         self.num_warm_up_steps = num_warm_up_steps
         self.train_step: int = 0
+        self.eval_step: int = 0
         self.eval_frequency = eval_frequency
-        self.steps_so_far = 0
 
         now = datetime.now().strftime('%m-%d-%d_%H-%M-%S')
         log_dir = osp.join(log_dir, f'{name:s}_{now:s}')
@@ -49,6 +51,10 @@ class BaseTrainer:
 
     def train(self, execution: bool = False) -> Any:
         meter = AverageMeterGroup()
+        # Warm-up exploration before training
+        while self.train_step < self.num_warm_up_steps:
+            self.explore()
+
         for episode in tqdm(range(1, self.num_episodes + 1),
                             desc='Training Progress',
                             position=0,

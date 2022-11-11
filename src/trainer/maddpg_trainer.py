@@ -75,8 +75,44 @@ class MADDPGTrainer(BaseTrainer):
                                               soft_update_tau=soft_update_tau,)
         self.buffer = MADDPGReplayBuffer(self.agents, buffer_size)
 
+    def explore(self) -> int:
+        ob_n = self.env.reset()
+        state = self.env.state()
+        episode_done = False
+        step: int = 0
+        while self.env.agents and not episode_done:
+            actions = {_id: self.env.action_space(_id).sample()
+                       for _id in self.env.agents}
+            ac_n = {
+                _id: self.process_sample_ac(ac, self.env.action_space(_id))
+                for _id, ac in actions.items()
+            }
+            # Step action and store transition
+            next_ob_n, rew_n, done_n, truncated_n, _ = self.env.step(actions)
+            episode_done = all(truncated_n.values())
+            next_state: np.ndarray = self.env.state()
+            self.buffer.add_transition(
+                state, next_state, ob_n, ac_n, next_ob_n, rew_n, done_n
+            )
+            ob_n = next_ob_n
+            state = next_state
+            step += 1
+
+        return step
+
     def train(self, execution: bool = False) -> Any:
         meters = {agent_id: AverageMeterGroup() for agent_id in self.agents}
+
+        # Warm-up exploration before training
+        print('Exploring...')
+        self.num_warm_up_steps = self.num_warm_up_steps or self.batch_size
+        pbar = tqdm(total=self.num_warm_up_steps)
+        while len(self.buffer) < self.num_warm_up_steps:
+            steps = self.explore()
+            pbar.update(steps)
+        pbar.close()
+
+        print('Training...')
         for episode in tqdm(range(1, self.num_episodes + 1),
                             desc='Training Progress',
                             position=0,
@@ -110,28 +146,19 @@ class MADDPGTrainer(BaseTrainer):
             agent.set_train()
 
         while self.env.agents and not episode_done:
-            if self.train_step < self.num_warm_up_steps:
-                # Random exploration
-                actions = {_id: self.env.action_space(_id).sample()
-                           for _id in self.env.agents}
-                ac_n = {
-                    _id: self.process_sample_ac(ac, self.env.action_space(_id))
-                    for _id, ac in actions.items()
-                }
-            else:
-                # Run policy network
-                actions, ac_n = {}, {}
-                for _id, ob in ob_n.items():
-                    ob = th.from_numpy(ob).view(1, -1).float().to(self.device)
-                    ac = self.agents[_id].get_action(ob, explore=True)
-                    actions[_id] = self.process_forward_ac(
-                        ac, self.env.action_space(_id)
-                    )
-                    ac_n[_id] = ac.detach().cpu().numpy()
+            # Run policy network
+            actions, ac_n = {}, {}
+            for _id, ob in ob_n.items():
+                ob = th.from_numpy(ob).view(1, -1).float().to(self.device)
+                ac = self.agents[_id].get_action(ob, explore=True)
+                actions[_id] = self.process_forward_ac(
+                    ac, self.env.action_space(_id)
+                )
+                ac_n[_id] = ac.detach().cpu().numpy()
 
             # Step action and store transition
-            next_ob_n, rew_n, done_n, _, _ = self.env.step(actions)
-            episode_done = all(done_n.values())
+            next_ob_n, rew_n, done_n, truncated_n, _ = self.env.step(actions)
+            episode_done = all(truncated_n.values())
             next_state: np.ndarray = self.env.state()
             for agent_id, rew in rew_n.items():
                 logs[agent_id]['episode_returns'].append(rew)
@@ -139,52 +166,51 @@ class MADDPGTrainer(BaseTrainer):
                 state, next_state, ob_n, ac_n, next_ob_n, rew_n, done_n
             )
             ob_n = next_ob_n
+            state = next_state
 
             # Train the agent
-            if len(self.buffer) > self.batch_size and \
-                    self.train_step > self.num_warm_up_steps:
-                for agent_id, agent in self.agents.items():
-                    states, next_states, obs_n, acs_n, \
-                        next_obs_n, rew_n, dones_n = \
-                        self.buffer.sample(self.batch_size, self.device)
+            for agent_id, agent in self.agents.items():
+                states, next_states, obs_n, acs_n, \
+                    next_obs_n, rew_n, dones_n = \
+                    self.buffer.sample(self.batch_size, self.device)
 
-                    # Derive centralized state
-                    states = th.from_numpy(states).to(self.device)
-                    next_states = th.from_numpy(next_states).to(self.device)
-                    actions = th.hstack(list(acs_n.values()))
-                    next_actions = th.hstack(
-                        [self.agents[_id].get_action(next_obs_n[_id],
-                                                     explore=False,
-                                                     target=True).detach()
-                            for _id in self.agents]
-                    )
+                # Derive centralized state
+                states = th.from_numpy(states).to(self.device)
+                next_states = th.from_numpy(next_states).to(self.device)
+                actions = th.hstack(list(acs_n.values()))
+                next_actions = th.hstack(
+                    [self.agents[_id].get_action(next_obs_n[_id],
+                                                 explore=False,
+                                                 target=True).detach()
+                        for _id in self.agents]
+                )
 
-                    ob, ac, _, rew, done = \
-                        obs_n[agent_id], acs_n[agent_id], \
-                        next_ob_n[agent_id], rew_n[agent_id], dones_n[agent_id]
+                ob, ac, _, rew, done = \
+                    obs_n[agent_id], acs_n[agent_id], \
+                    next_ob_n[agent_id], rew_n[agent_id], dones_n[agent_id]
 
-                    # Update critic network
-                    critic_loss = agent.update_critic(
-                        obs=states,
-                        acs=th.hstack(list(acs_n.values())),
-                        next_obs=next_states,
-                        next_acs=next_actions,
-                        rews=rew,
-                        dones=done
-                    )
-                    logs[agent_id]['critic_loss'].append(critic_loss)
+                # Update critic network
+                critic_loss = agent.update_critic(
+                    obs=states,
+                    acs=th.hstack(list(acs_n.values())),
+                    next_obs=next_states,
+                    next_acs=next_actions,
+                    rews=rew,
+                    dones=done
+                )
+                logs[agent_id]['critic_loss'].append(critic_loss)
 
-                    # Update actor network
-                    new_action = agent.get_action(ob, False, target=False)
-                    acs_n[agent_id] = new_action
-                    policy_loss = agent.update_policy(
-                        obs=states,
-                        acs=th.hstack(list(acs_n.values()))
-                    )
-                    logs[agent_id]['policy_loss'].append(policy_loss)
+                # Update actor network
+                new_action = agent.get_action(ob, False, target=False)
+                acs_n[agent_id] = new_action
+                policy_loss = agent.update_policy(
+                    obs=states,
+                    acs=th.hstack(list(acs_n.values()))
+                )
+                logs[agent_id]['policy_loss'].append(policy_loss)
 
-                    # Update target networks
-                    agent.update_target()
+                # Update target networks
+                agent.update_target()
 
             self.train_step += 1
             steps += 1

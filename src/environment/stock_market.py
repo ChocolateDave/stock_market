@@ -70,11 +70,6 @@ class StockMarketEnv(ParallelEnv):
         self.max_shares = max_shares
         self.worth_of_stocks = worth_of_stocks
         self.possible_agents = [f'agent_{i}' for i in range(num_agents)]
-        self.agents = self.possible_agents[:]
-        self._index_map = {
-            name: idx for idx, name in enumerate(self.possible_agents)
-        }
-        self._agent_selector = agent_selector(self.agents)
 
         # Stock Market Parameters
         self.dt = step_size
@@ -86,8 +81,7 @@ class StockMarketEnv(ParallelEnv):
         self.n_uncorrelated_stocks = num_uncorrelated_stocks
         self.n_stocks = num_correlated_stocks + num_uncorrelated_stocks + 1
         if not isinstance(start_prices, float):
-            assert self.n_stocks == self.start_prices.shape or \
-                self.n_stocks == self.start_prices.shape[0]
+            assert self.n_stocks == len(self.start_prices)
         self.seed(seed=seed)
         self._reset_market()
 
@@ -145,59 +139,6 @@ class StockMarketEnv(ParallelEnv):
     def state_space(self) -> int:
         return self.n_stocks
 
-    def _reset_market(self) -> None:
-        # Randomly generate starting stock prices for correlated and
-        # uncorrelated stocks. NOTE: minimum stock price is $1.0
-        if isinstance(self.start_prices, float):
-            self.current_price = self.start_prices
-            other_stocks = np.clip(
-                np.random.normal(loc=self.start_prices,
-                                 scale=self.price_std,
-                                 size=(self.n_correlated_stocks +
-                                       self.n_uncorrelated_stocks,)),
-                a_min=1.0, a_max=None
-            )
-        else:
-            self.current_price = self.start_prices[0]
-            other_stocks = self.start_prices[1:]
-        self.correlated_stocks = other_stocks[:self.n_correlated_stocks]
-        self.uncorrelated_stocks = other_stocks[self.n_correlated_stocks:]
-
-        # Randomly create masks for agents
-        self.valid_mask = {agent: np.zeros([self.n_stocks, ], dtype='bool')
-                           for agent in self.agents}
-        _idcs = self._np_rng.choice(2, self.num_agents).astype('bool')
-        for _idx in _idcs.nonzero()[0]:
-            self.valid_mask[self.agents[_idx]][
-                1:1+self.n_correlated_stocks] = True
-            self.valid_mask[self.agents[_idx]][
-                -self.n_uncorrelated_stocks:] = True
-
-        # Starting budgets and shares
-        self.budgets = self.budge_range[0] + self._np_rng.random(
-            size=(self.num_agents), dtype='float32'
-        ) * (self.budge_range[1] - self.budge_range[0])
-        self.shares = self._np_rng.integers(low=1,  # TODO: move this to init
-                                            high=self.max_shares,
-                                            size=(self.num_agents))
-
-        # Randomize utility functions
-        self.eta = np.clip(
-            np.random.normal(loc=1.5, scale=1.5, size=(self.num_agents,)),
-            a_min=0, a_max=10
-        )
-
-        self.timestep = 0
-
-        return (np.asarray(self.current_price),
-                {
-                    "correlated_stocks": self.correlated_stocks,
-                    "uncorrelated_stocks": self.uncorrelated_stocks,
-                    "budgets": self.budgets,
-                    "shares": self.shares,
-                    "valid_mask": self.valid_mask,
-        })
-
     def step(self,
              actions: Dict[str, Tuple[np.ndarray, int]]
              ) -> Tuple[Dict, Dict, Dict, Dict, Dict]:
@@ -243,22 +184,25 @@ class StockMarketEnv(ParallelEnv):
         potential_budgets = self.budgets - proposed_prices * proposed_shares
         potential_shares_held = self.shares + proposed_shares
         violations = (potential_budgets < 0.) + (potential_shares_held < 0.)
-        rewards = {
+        rewards_n = {
             agent: -100.0 if violate else self.utility(c[i], self.eta[i])
             for i, (agent, violate) in enumerate(zip(self.agents, violations))
         }
 
+        # Retreive values
         self.timestep += 1
-        done = {agent: True if rewards[agent] < 0.0 else False
-                for agent in self.agents}
-        if any(list(done.values())) or self.timestep >= self.max_cycles:
-            next_obs = self.reset()
-            done = {agent: True for agent in self.agents}
-        else:
-            next_obs = {agent: self.state() * self.valid_mask[agent]
-                        for agent in self.agents}
+        next_obs_n = {agent: self.state() * self.valid_mask[agent]
+                      for agent in self.agents}
+        dones_n = {agent: True if rewards_n[agent] < 0.0 else False
+                   for agent in self.agents}
+        env_truncation = self.timestep >= self.max_cycles or \
+            all(dones_n.values())  # NOTE: terminates when all are done
+        if env_truncation:
+            self.agents = []
+        truncated_n = {agent: env_truncation for agent in self.agents}
+        info = {agent: {} for agent in self.agents}
 
-        return next_obs, rewards, done, None, {}
+        return next_obs_n, rewards_n, dones_n, truncated_n, info
 
     # NOTE: Your broker or clearing institution typically does this in real
     # life action is a price and volume array. Volume must be a nonnegative
@@ -361,6 +305,57 @@ class StockMarketEnv(ParallelEnv):
                 delta_shares[i] = delta_ask_shares[ask_profit_idx]
                 ask_profit_idx += 1
         return profits, delta_shares, np.asarray(close), volatility
+
+    def _reset_market(self) -> None:
+        # Initialize agents
+        self.agents = self.possible_agents[:]
+        self._index_map = {
+            name: idx for idx, name in enumerate(self.possible_agents)
+        }
+        self._agent_selector = agent_selector(self.agents)
+
+        # Randomly generate starting stock prices for correlated and
+        # uncorrelated stocks. NOTE: minimum stock price is $1.0
+        if isinstance(self.start_prices, float):
+            self.current_price = self.start_prices
+            other_stocks = np.clip(
+                np.random.normal(loc=self.start_prices,
+                                 scale=self.price_std,
+                                 size=(self.n_correlated_stocks +
+                                       self.n_uncorrelated_stocks,)),
+                a_min=1.0, a_max=None
+            )
+        else:
+            self.current_price = self.start_prices[0]
+            other_stocks = self.start_prices[1:]
+        self.correlated_stocks = other_stocks[:self.n_correlated_stocks]
+        self.uncorrelated_stocks = other_stocks[self.n_correlated_stocks:]
+
+        # Randomly create masks for agents
+        self.valid_mask = {agent: np.zeros([self.n_stocks, ], dtype='bool')
+                           for agent in self.agents}
+        _idcs = self._np_rng.choice(2, self.num_agents).astype('bool')
+        for _idx in _idcs.nonzero()[0]:
+            self.valid_mask[self.agents[_idx]][
+                1:1+self.n_correlated_stocks] = True
+            self.valid_mask[self.agents[_idx]][
+                -self.n_uncorrelated_stocks:] = True
+
+        # Starting budgets and shares
+        self.budgets = self.budge_range[0] + self._np_rng.random(
+            size=(self.num_agents), dtype='float32'
+        ) * (self.budge_range[1] - self.budge_range[0])
+        self.shares = self._np_rng.integers(low=1,  # TODO: move this to init
+                                            high=self.max_shares,
+                                            size=(self.num_agents))
+
+        # Randomize utility functions
+        self.eta = np.clip(
+            np.random.normal(loc=1.5, scale=1.5, size=(self.num_agents,)),
+            a_min=0, a_max=10
+        )
+
+        self.timestep = 0
 
     @staticmethod
     def utility(c: float, eta: float) -> float:

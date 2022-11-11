@@ -68,7 +68,9 @@ if __name__ == '__main__':
         config["Trainer"]["device"] = th.device('cuda')
         if isinstance(args['gpu_id'], List):
             config["_parallel"] = True
-            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(args.gpu)
+            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+                [str(i) for i in args['gpu_id']]
+            )
         else:
             os.environ['CUDA_VISIBLE_DEVICES'] = str(args['gpu_id'])[0]
 
