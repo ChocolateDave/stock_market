@@ -25,6 +25,9 @@ def make_env(**kwargs) -> ParallelEnv:
         return mpe.simple_spred_v2.parallel_env(**kwargs)
     elif _id == 'simple_tag_v2':
         return mpe.simple_tag_v2.parallel_env(**kwargs)
+    elif _id == 'stock_market':
+        # TODO (Juanwu): implement stock market environment
+        return None
     else:
         raise ValueError('Unsupported environment name %s' % _id)
 

@@ -6,7 +6,7 @@
 """Vanilla Replay Buffer Module"""
 from __future__ import annotations
 
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 from src.memory.base_buffer import BaseBuffer, Path
@@ -44,7 +44,9 @@ class ReplayBuffer(BaseBuffer):
 
     def sample(self,
                batch_size: int,
-               random: bool = False) -> Tuple[np.ndarray, ...]:
+               random: bool = False,
+               rand_idcs: Optional[Sequence[int]] = None
+               ) -> Tuple[np.ndarray, ...]:
         assert (
             self.observations.shape[0] ==
             self.actions.shape[0] ==
@@ -54,8 +56,13 @@ class ReplayBuffer(BaseBuffer):
         ), RuntimeError("Unmatched size MDP tuple elements found!")
 
         if random:
-            # Randomly sample data from buffer
-            rand_idcs = np.random.permutation(len(self))[:batch_size]
+            if rand_idcs is None:
+                # Randomly sample data from buffer
+                rand_idcs = np.random.permutation(len(self))[:batch_size]
+            else:
+                assert len(rand_idcs) >= batch_size
+                rand_idcs = rand_idcs[:batch_size]
+
             return (
                 self.observations[rand_idcs],
                 self.actions[rand_idcs],

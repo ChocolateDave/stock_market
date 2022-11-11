@@ -13,7 +13,7 @@ import numpy as np
 import torch as th
 from pettingzoo import ParallelEnv
 from src.agent.ddpg_agent import DDPGAgent
-from src.memory.multi_replay_buffer import MultiAgentReplayBuffer
+from src.memory.multi_replay_buffer import MADDPGReplayBuffer
 from src.trainer.base_trainer import BaseTrainer
 from src.utils import AverageMeterGroup
 from tqdm import tqdm
@@ -68,7 +68,7 @@ class MADDPGTrainer(BaseTrainer):
                                               discount=discount,
                                               grad_clip=grad_clip,
                                               soft_update_tau=soft_update_tau,)
-        self.buffer = MultiAgentReplayBuffer(self.agents, buffer_size)
+        self.buffer = MADDPGReplayBuffer(self.agents, buffer_size)
 
     def train(self, execution: bool = False) -> Any:
         meters = {agent_id: AverageMeterGroup() for agent_id in self.agents}
@@ -100,6 +100,7 @@ class MADDPGTrainer(BaseTrainer):
         episode_done: bool = False
         steps: int = 0
         ob_n: Dict[str, np.ndarray] = self.env.reset()
+        state: np.ndarray = self.env.state()
         for agent in self.agents.values():
             agent.set_train()
 
@@ -122,20 +123,24 @@ class MADDPGTrainer(BaseTrainer):
             # Step action and store transition
             next_ob_n, rew_n, done_n, _, _ = self.env.step(actions)
             episode_done = all(done_n.values())
+            next_state: np.ndarray = self.env.state()
             for agent_id, rew in rew_n.items():
                 logs[agent_id]['episode_returns'].append(rew)
-            self.buffer.add_transition(ob_n, ac_n, next_ob_n, rew_n, done_n)
+            self.buffer.add_transition(
+                state, next_state, ob_n, ac_n, next_ob_n, rew_n, done_n
+            )
 
             # Train the agent
             if len(self.buffer) > self.batch_size and \
                     self.train_step > self.num_warm_up_steps:
                 for agent_id, agent in self.agents.items():
-                    obs_n, acs_n, next_obs_n, rew_n, dones_n = \
-                        self.buffer.sample(self.batch_size, self.device, True)
+                    states, next_states, obs_n, acs_n, \
+                        next_obs_n, rew_n, dones_n = \
+                        self.buffer.sample(self.batch_size, self.device)
 
                     # Derive centralized state
-                    states = th.hstack(list(obs_n.values()))
-                    next_states = th.hstack(list(next_obs_n.values()))
+                    states = th.from_numpy(states).to(self.device)
+                    next_states = th.from_numpy(next_states).to(self.device)
                     actions = th.hstack(list(acs_n.values()))
                     next_actions = th.hstack(
                         [self.agents[_id].get_action(next_obs_n[_id],

@@ -60,10 +60,8 @@ class DDPGAgent(BaseAgent):
         self.critic_opt = optim.Adam(
             self.critic.critic_net.parameters(),
             lr=critic_lr or learning_rate,
-            weight_decay=1e-6 # 0 sometimes works better
+            weight_decay=1e-6  # 0 sometimes works better
         )
-
-        print(learning_rate, policy_lr, critic_lr, self.critic_opt.param_groups[0]['lr'], self.policy_opt.param_groups[0]['lr'])
 
         self.training_step = 0
 

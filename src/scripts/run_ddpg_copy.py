@@ -4,22 +4,21 @@
 # @date   Oct-23-22
 # =============================================================================
 from __future__ import annotations
+from src.utils import load_config
+from src.trainer.ddpg_trainer import DDPGTrainer
+import torch as th
+from gym.wrappers import RescaleAction
+import gym
+from typing import Any, List, Mapping
+import os
+import argparse
 import sys
 
-#print(sys.path)
-sys.path.append('c:\\users\\scien\\onedrive\\desktop\\fa2022\\cs285\\stock_market')
+# print(sys.path)
+sys.path.append(
+    'c:\\users\\scien\\onedrive\\desktop\\fa2022\\cs285\\stock_market')
 
 # https://pemami4911.github.io/blog/2016/08/21/ddpg-rl.html
-
-import argparse
-import os
-from typing import Any, List, Mapping
-
-import gym
-from gym.wrappers import RescaleAction
-import torch as th
-from src.trainer.ddpg_trainer import DDPGTrainer
-from src.utils import load_config
 
 
 def main(args: Mapping[str, Any]) -> None:

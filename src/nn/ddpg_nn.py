@@ -16,20 +16,22 @@ from torch.nn import Linear, BatchNorm1d
 from torch.nn import functional as F
 
 
-def fanin_init(size: Union[int, th.Size], fanin: Optional[int]=None) -> Tensor:
+def fanin_init(size: Union[int, th.Size],
+               fanin: Optional[int] = None) -> Tensor:
     fanin = fanin or size[0]
     v = 1.0 / math.sqrt(fanin)
     return th.Tensor(size).uniform_(-v, v)
+
 
 class PolicyNet(BaseNN):
 
     def __init__(self,
                  in_features: int,
                  out_features: int,
-                 num_hidden_1: int = 64, #400
-                 num_hidden_2: int = 64, #300
+                 num_hidden_1: int = 400,
+                 num_hidden_2: int = 300,
                  init_w: float = 3e-3,
-                 batchnorm: bool = True) -> None:
+                 batchnorm: bool = False) -> None:
         super().__init__()
         self.batchnorm = batchnorm
         self.bn_1 = BatchNorm1d(in_features)
@@ -39,7 +41,7 @@ class PolicyNet(BaseNN):
         self.bn_3 = BatchNorm1d(num_hidden_2)
         self.fc_3 = Linear(num_hidden_2, out_features)
         self.reset_parameters(init_w)
-    
+
     def forward(self, obs: Tensor) -> Tensor:
         obs = obs.float()
         if self.batchnorm:
@@ -68,8 +70,8 @@ class CriticNet(BaseNN):
     def __init__(self,
                  obs_in_features: int,
                  acs_in_features: int,
-                 num_hidden_1: int = 64, #400
-                 num_hidden_2: int = 64, #300
+                 num_hidden_1: int = 64,  # 400
+                 num_hidden_2: int = 64,  # 300
                  init_w: float = 3e-3,
                  batchnorm: bool = True) -> None:
         super().__init__()
