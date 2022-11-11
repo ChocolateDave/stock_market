@@ -23,7 +23,7 @@ class DDPGCritic(BaseCritic):
                  learning_rate: float = 1e-4,
                  soft_update_tau: Optional[float] = None,
                  grad_clip: Optional[float] = None,
-                 huber_loss: bool = True) -> None:
+                 huber_loss: bool = False) -> None:
         super().__init__()
 
         self.obs_size = observation_size

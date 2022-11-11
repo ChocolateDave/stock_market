@@ -12,9 +12,6 @@ from datetime import datetime
 from os import path as osp
 from typing import Any, Mapping, Optional, Union
 
-from gym.core import Env
-from src.agent.base_agent import BaseAgent
-from src.memory.base_buffer import BaseBuffer
 from src.utils import AverageMeterGroup
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -44,6 +41,7 @@ class BaseTrainer:
         self.num_warm_up_steps = num_warm_up_steps
         self.train_step: int = 0
         self.eval_frequency = eval_frequency
+        self.steps_so_far = 0
 
         now = datetime.now().strftime('%m-%d-%d_%H-%M-%S')
         log_dir = osp.join(log_dir, f'{name:s}_{now:s}')
@@ -62,10 +60,15 @@ class BaseTrainer:
             for key, val in meter.items():
                 key = 'Train/' + key
                 self.writer.add_scalar(key, val, episode)
-
+            # print('steps:', self.steps_so_far)
             if episode % self.eval_frequency == 0 and execution:
                 self.set_eval()
-                log = self.exec_one_epoch(episode)
+                mean_reward = 0.
+                for i in range(20):
+                    log = self.exec_one_epoch(episode)
+                    mean_reward += log['eval_returns']
+                log = {'mean_reward': mean_reward / 20}
+                # print('log:', log)
                 for key, val in log.items():
                     key = 'Execution/' + key
                     self.writer.add_scalar(key, val, episode)

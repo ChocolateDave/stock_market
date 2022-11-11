@@ -70,8 +70,8 @@ class CriticNet(BaseNN):
     def __init__(self,
                  obs_in_features: int,
                  acs_in_features: int,
-                 num_hidden_1: int = 64,  # 400
-                 num_hidden_2: int = 64,  # 300
+                 num_hidden_1: int = 400,
+                 num_hidden_2: int = 300,
                  init_w: float = 3e-3,
                  batchnorm: bool = False) -> None:
         super().__init__()
@@ -83,6 +83,7 @@ class CriticNet(BaseNN):
         self.fc_1 = Linear(obs_in_features, num_hidden_1)
         self.bn_2 = BatchNorm1d(num_hidden_1)
         self.fc_2 = Linear(num_hidden_1, num_hidden_2)
+        #self.fc_2 = Linear(num_hidden_1 + acs_in_features, num_hidden_2)
         self.fc_act = Linear(acs_in_features, num_hidden_2)
         self.fc_3 = Linear(num_hidden_2, 1)
         self.reset_parameters(init_w)
@@ -98,7 +99,9 @@ class CriticNet(BaseNN):
         acs = self.fc_act(acs)
         q_val = F.relu(obs + acs)
         q_val = self.fc_3(q_val)
-
+        #obs = F.relu(self.fc_1(obs))
+        #q_val = F.relu(self.fc_2(th.cat([obs, acs],1)))
+        #q_val = self.fc_3(q_val)
         return q_val
 
     def reset_parameters(self, init_w: float = 3e-3) -> None:

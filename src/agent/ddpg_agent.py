@@ -24,7 +24,7 @@ class DDPGAgent(BaseAgent):
                  policy_action_size: Optional[int] = None,
                  discrete_action: bool = False,
                  device: Optional[th.device] = None,
-                 learning_rate: Optional[float] = 1e-4,
+                 learning_rate: Optional[float] = None,
                  policy_lr: Optional[float] = None,
                  critic_lr: Optional[float] = None,
                  discount: Optional[float] = 0.99,
@@ -60,7 +60,7 @@ class DDPGAgent(BaseAgent):
         self.critic_opt = optim.Adam(
             self.critic.critic_net.parameters(),
             lr=critic_lr or learning_rate,
-            weight_decay=1e-6  # 0 sometimes works better
+            weight_decay=1e-2  # 1e-6 # 0 sometimes works better
         )
 
         self.training_step = 0
