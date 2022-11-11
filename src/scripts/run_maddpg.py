@@ -12,6 +12,8 @@ from typing import Any, List, Mapping
 
 import torch as th
 from pettingzoo import ParallelEnv, mpe
+from src.environment.stock_market import (
+    LogarithmAndIntActionWrapper, StockMarketEnv)
 from src.trainer.maddpg_trainer import MADDPGTrainer
 from src.utils import load_config
 
@@ -27,7 +29,7 @@ def make_env(**kwargs) -> ParallelEnv:
         return mpe.simple_tag_v2.parallel_env(**kwargs)
     elif _id == 'stock_market':
         # TODO (Juanwu): implement stock market environment
-        return None
+        return LogarithmAndIntActionWrapper(StockMarketEnv(**kwargs))
     else:
         raise ValueError('Unsupported environment name %s' % _id)
 

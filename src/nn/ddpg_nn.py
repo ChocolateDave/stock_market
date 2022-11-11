@@ -73,7 +73,7 @@ class CriticNet(BaseNN):
                  num_hidden_1: int = 64,  # 400
                  num_hidden_2: int = 64,  # 300
                  init_w: float = 3e-3,
-                 batchnorm: bool = True) -> None:
+                 batchnorm: bool = False) -> None:
         super().__init__()
 
         self.batchnorm = batchnorm

@@ -1,0 +1,15 @@
+Env:
+  id: stock_market
+  num_agents: 10
+  max_cycles: 25
+Trainer:
+  buffer_size: 1000000
+  batch_size: 64
+  device: cpu
+  max_episode_steps: 200
+  num_episodes: 1000
+  name: Stock_Market_v1
+  policy_lr: 0.001
+  critic_lr: 0.001
+  discount: 0.99
+  soft_update_tau: 0.001
