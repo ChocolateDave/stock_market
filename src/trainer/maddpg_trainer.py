@@ -138,6 +138,7 @@ class MADDPGTrainer(BaseTrainer):
             self.buffer.add_transition(
                 state, next_state, ob_n, ac_n, next_ob_n, rew_n, done_n
             )
+            ob_n = next_ob_n
 
             # Train the agent
             if len(self.buffer) > self.batch_size and \
