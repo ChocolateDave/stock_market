@@ -136,8 +136,9 @@ class StockMarketEnv(ParallelEnv):
             self.uncorrelated_stocks
         ])
 
-    def state_space(self) -> int:
-        return self.n_stocks
+    @property
+    def state_space(self) -> Box:
+        return self._state_space
 
     def step(self,
              actions: Dict[str, Tuple[np.ndarray, int]]
@@ -354,12 +355,13 @@ class StockMarketEnv(ParallelEnv):
             np.random.normal(loc=1.5, scale=1.5, size=(self.num_agents,)),
             a_min=0, a_max=10
         )
+        # self.eta = np.ones(shape=(self.num_agents, )) * 0.5
 
         self.timestep = 0
 
     @staticmethod
-    def utility(c: float, eta: float) -> float:
+    def utility(c: float, eta: float, eps: float = 1e-6) -> float:
         if eta != 1.:
-            return (c ** (1. - eta) - 1.) / (1. - eta)
+            return (c ** (1. - eta) - 1.) / (1. - eta + eps)
         else:
             return math.log(c)

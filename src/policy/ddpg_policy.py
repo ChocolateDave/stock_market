@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from copy import deepcopy
-from typing import Any, Mapping, Optional
+from typing import Optional
 
 import numpy as np
 import torch as th
@@ -19,7 +19,15 @@ from torch.distributions import Distribution
 
 
 class OrnsteinUhlenbeckProcess:
-    def __init__(self, size, theta=0.15, mu=0., sigma=0.2, dt=1e-2, x0=None, sigma_min=None, n_steps_annealing=1000):
+    def __init__(self,
+                 size,
+                 theta=0.15,
+                 mu=0.,
+                 sigma=0.2,
+                 dt=1e-2,
+                 x0=None,
+                 sigma_min=None,
+                 n_steps_annealing=1000) -> None:
         self.theta = theta
         self.dt = dt
         self.x0 = x0
@@ -49,7 +57,7 @@ class OrnsteinUhlenbeckProcess:
 
     def reset(self):
         self.x_prev = self.x0 if self.x0 is not None else np.zeros(self.size)
-    
+
     @property
     def current_sigma(self):
         sigma = max(self.sigma_min, self.m * float(self.n_steps) + self.c)
@@ -66,9 +74,9 @@ class OUNoise:
                  scale: float = 0.1,
                  theta: float = 0.15,
                  sigma: float = 0.2,
-                 dt: float = 1e-2, # 1e-2
+                 dt: float = 1e-2,  # 1e-2
                  final_anneal_scale: Optional[float] = 0.02,
-                 scale_timesteps: Optional[float] = 10000) -> None: 
+                 scale_timesteps: Optional[float] = 10000) -> None:
         super().__init__()
 
         self.action_size = action_size
@@ -87,7 +95,7 @@ class OUNoise:
         x = self.state
         dx = self.theta * (self.mu - x) * self.dt + \
             math.sqrt(self.dt) * self.sigma * \
-                np.random.normal(size=self.action_size)
+            np.random.normal(size=self.action_size)
         self.state = x + dx
         noise = self.state * self.scale * self.scheduled_scale()
         return noise
@@ -108,19 +116,16 @@ class OUNoise:
                 return self.final_anneal_scale
         else:
             return 1.
-        
 
 
-class DDPGPolicy(BasePolicy, nn.Module):
+class DDPGPolicy(BasePolicy):
 
     def __init__(self,
                  observation_size: int,
                  action_size: int,
                  discrete_action: bool = False,
                  device: th.device = th.device('cpu'),
-                 learning_rate: float = 1e-4,
                  soft_update_tau: Optional[float] = None,
-                 optimizer_kwargs: Optional[Mapping[str, Any]] = None,
                  random_timesteps: Optional[float] = 1000,
                  **kwargs) -> None:
         super().__init__()
@@ -172,8 +177,8 @@ class DDPGPolicy(BasePolicy, nn.Module):
         else:
             if explore:
                 # Explore continous action space with OUNoise
-                acs += th.from_numpy(max(self.eps, 0) * 
-                    self.exploration.sample()).to(acs.device)
+                acs += th.from_numpy(max(self.eps, 0) *
+                                     self.exploration.sample()).to(acs.device)
                 self.eps -= self.delta_eps
             acs = acs.clamp(min=-1.0, max=1.0)
 

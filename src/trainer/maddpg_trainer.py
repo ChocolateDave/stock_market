@@ -56,7 +56,7 @@ class MADDPGTrainer(BaseTrainer):
 
         self.agents: Dict[str, DDPGAgent] = {}
         if hasattr(self.env, 'state_space'):
-            ob_n_dim = self.env.state_space()
+            ob_n_dim = self.env.state_space.shape[0]
         else:
             ob_n_dim = sum(val[0] for val in _agent_dim.values())
         ac_n_dim = sum(val[1] for val in _agent_dim.values())

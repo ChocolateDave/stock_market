@@ -4,7 +4,7 @@
 # @date   Oct-2-22
 # =============================================================================
 """Deep Deterministic Policy Gradient agent module."""
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch as th
 from src.agent.base_agent import BaseAgent
@@ -28,7 +28,9 @@ class DDPGAgent(BaseAgent):
                  policy_lr: Optional[float] = None,
                  critic_lr: Optional[float] = None,
                  discount: Optional[float] = 0.99,
-                 grad_clip: Optional[Tuple[float, float]] = None,
+                 grad_clip: Optional[float] = None,
+                 policy_grad_clip: Optional[float] = None,
+                 critic_grad_clip: Optional[float] = None,
                  soft_update_tau: Optional[float] = 0.001,
                  **kwargs) -> None:
         super().__init__()
@@ -42,10 +44,9 @@ class DDPGAgent(BaseAgent):
             learning_rate=policy_lr or learning_rate,
             soft_update_tau=soft_update_tau,
         )
-        self.policy_opt = optim.Adam(
-            self.policy.policy_net.parameters(),
-            lr=policy_lr or learning_rate
-        )
+        self.policy_opt = optim.Adam(self.policy.parameters(),
+                                     lr=policy_lr or learning_rate)
+        self.policy_grad_clip = policy_grad_clip or grad_clip
 
         self.critic: DDPGCritic = DDPGCritic(
             observation_size=observation_size or critic_observation_size,
@@ -56,12 +57,10 @@ class DDPGAgent(BaseAgent):
             soft_update_tau=soft_update_tau,
             grad_clip=grad_clip
         )
-
-        self.critic_opt = optim.Adam(
-            self.critic.critic_net.parameters(),
-            lr=critic_lr or learning_rate,
-            weight_decay=1e-2  # 1e-6 # 0 sometimes works better
-        )
+        self.critic_opt = optim.Adam(self.critic.parameters(),
+                                     lr=critic_lr or learning_rate,
+                                     weight_decay=1e-2)
+        self.critic_grad_clip = critic_grad_clip or grad_clip
 
         self.training_step = 0
 
@@ -93,6 +92,9 @@ class DDPGAgent(BaseAgent):
 
         self.critic_opt.zero_grad()
         critic_loss.backward()
+        if self.critic_grad_clip:
+            th.nn.utils.clip_grad_value_(self.critic.parameters(),
+                                         self.critic_grad_clip)
         self.critic_opt.step()
 
         return critic_loss.item()
@@ -107,6 +109,9 @@ class DDPGAgent(BaseAgent):
 
         self.policy_opt.zero_grad()
         policy_loss.backward()
+        if self.policy_grad_clip:
+            th.nn.utils.clip_grad_value_(self.policy.parameters(),
+                                         self.policy_grad_clip)
         self.policy_opt.step()
 
         return policy_loss.item()
