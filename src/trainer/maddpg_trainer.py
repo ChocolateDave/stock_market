@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Dict, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import numpy as np
 import torch as th
@@ -36,6 +36,7 @@ class MADDPGTrainer(BaseTrainer):
                  learning_rate: Optional[float] = 1e-4,
                  policy_lr: Optional[float] = None,
                  critic_lr: Optional[float] = None,
+                 action_range: Optional[List[float]] = None,
                  discount: Optional[float] = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
                  soft_update_tau: Optional[float] = 0.9,
@@ -65,6 +66,7 @@ class MADDPGTrainer(BaseTrainer):
                                               policy_observation_size=ob_dim,
                                               critic_action_size=ac_n_dim,
                                               policy_action_size=ac_dim,
+                                              action_range=action_range,
                                               discrete_action=True,
                                               device=device,
                                               learning_rate=learning_rate,

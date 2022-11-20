@@ -29,7 +29,10 @@ class LogarithmAndIntActionWrapper(BaseParallelWraper):
              actions: Dict[str, Tuple[np.ndarray, int]]
              ) -> Tuple[Dict, Dict, Dict, Dict, Dict]:
         actions = {
-            agent: (np.exp(ac[0]), math.ceil(ac[1]))
+            agent: (
+                np.exp(np.arctanh(ac[0])) + 1.0,              # price
+                math.ceil(self.env.max_shares * ac[1] - 0.5)  # share volume
+            )
             for agent, ac in actions.items()
         }
         return super().step(actions)
@@ -210,7 +213,7 @@ class StockMarketEnv(ParallelEnv):
     # number implemented as Immediate or Cancel order (IOC)which is usually
     # default in exchanges. Technically, this is screwing over sellers,
     # as there are no market makers here.
-    # actions: log prices, share_vol = int, + -> buy, - -> sell, 0 -> hold
+    # actions: prices, share_vol = int, + -> buy, - -> sell, 0 -> hold
     # TODO: Cleanup
     def _clear(self,
                proposed_prices: np.ndarray,

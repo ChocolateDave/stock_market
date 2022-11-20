@@ -4,13 +4,14 @@
 # @date   Oct-2-22
 # =============================================================================
 """Deep Deterministic Policy Gradient agent module."""
-from typing import Optional
+from typing import List, Optional
 
 import torch as th
+from torch import Tensor, optim
+
 from src.agent.base_agent import BaseAgent
 from src.critic.ddpg_critic import DDPGCritic
 from src.policy.ddpg_policy import DDPGPolicy
-from torch import Tensor, optim
 
 
 class DDPGAgent(BaseAgent):
@@ -20,6 +21,7 @@ class DDPGAgent(BaseAgent):
                  critic_observation_size: Optional[int] = None,
                  policy_observation_size: Optional[int] = None,
                  action_size: Optional[int] = None,
+                 action_range: Optional[List[float]] = None,
                  critic_action_size: Optional[int] = None,
                  policy_action_size: Optional[int] = None,
                  discrete_action: bool = False,
@@ -39,6 +41,7 @@ class DDPGAgent(BaseAgent):
         self.policy: DDPGPolicy = DDPGPolicy(
             observation_size=observation_size or policy_observation_size,
             action_size=action_size or policy_action_size,
+            action_range=action_range,
             discrete_action=discrete_action,
             device=device,
             learning_rate=policy_lr or learning_rate,
@@ -131,7 +134,9 @@ class DDPGAgent(BaseAgent):
 
 if __name__ == "__main__":
     import argparse
+
     import gym
+
     from src.utils import load_config
 
     parser = argparse.ArgumentParser()

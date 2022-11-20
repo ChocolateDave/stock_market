@@ -6,9 +6,8 @@
 """Deep Deterministic Policy module."""
 from __future__ import annotations
 
-import math
 from copy import deepcopy
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 import torch as th
@@ -64,65 +63,12 @@ class OrnsteinUhlenbeckProcess:
         return sigma
 
 
-# Ornstein-Uhlenbeck Noise for continous random exploration
-# https://github.com/songrotek/DDPG/blob/master/ou_noise.py
-# =========================================================
-class OUNoise:
-    def __init__(self,
-                 action_size: int,
-                 mu: float = 0.0,
-                 scale: float = 0.1,
-                 theta: float = 0.15,
-                 sigma: float = 0.2,
-                 dt: float = 1e-2,  # 1e-2
-                 final_anneal_scale: Optional[float] = 0.02,
-                 scale_timesteps: Optional[float] = 10000) -> None:
-        super().__init__()
-
-        self.action_size = action_size
-        self.mu = mu
-        self.scale = scale
-        self.theta = theta
-        self.sigma = sigma
-        self.dt = dt
-        self.final_anneal_scale = final_anneal_scale
-        self.scale_timesteps = scale_timesteps
-
-        self.reset()
-
-    def sample(self) -> np.ndarray:
-
-        x = self.state
-        dx = self.theta * (self.mu - x) * self.dt + \
-            math.sqrt(self.dt) * self.sigma * \
-            np.random.normal(size=self.action_size)
-        self.state = x + dx
-        noise = self.state * self.scale * self.scheduled_scale()
-        return noise
-
-    def reset(self) -> None:
-        self.state = np.ones(self.action_size) * self.mu
-        self.i = 0
-
-    def scheduled_scale(self) -> float:
-        if self.final_anneal_scale:
-            if self.i < self.scale_timesteps:
-                p = self.i / self.scale_timesteps
-                scheduled_scale = self.final_anneal_scale * p + (1. - p)
-                self.i += 1
-                return scheduled_scale
-            else:
-                self.i += 1
-                return self.final_anneal_scale
-        else:
-            return 1.
-
-
 class DDPGPolicy(BasePolicy):
 
     def __init__(self,
                  observation_size: int,
                  action_size: int,
+                 action_range: Optional[List[float]] = None,
                  discrete_action: bool = False,
                  device: th.device = th.device('cpu'),
                  soft_update_tau: Optional[float] = None,
@@ -132,6 +78,7 @@ class DDPGPolicy(BasePolicy):
 
         self.obs_size = observation_size
         self.act_size = action_size
+        self.act_rng = action_range
         self.soft_update_tau = soft_update_tau
 
         self.policy_net = PolicyNet(observation_size, action_size).to(device)
@@ -180,7 +127,8 @@ class DDPGPolicy(BasePolicy):
                 acs += th.from_numpy(max(self.eps, 0) *
                                      self.exploration.sample()).to(acs.device)
                 self.eps -= self.delta_eps
-            acs = acs.clamp(min=-1.0, max=1.0)
+            if self.act_rng:
+                acs = acs.clamp(*self.act_rng[:2])
 
         return acs
 

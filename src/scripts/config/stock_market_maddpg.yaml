@@ -7,9 +7,12 @@ Trainer:
   batch_size: 64
   device: cpu
   max_episode_steps: 200
-  num_episodes: 1000
+  num_episodes: 5000
   name: Stock_Market_v1
   policy_lr: 0.001
   critic_lr: 0.001
+  action_range:
+    - -0.99999
+    - 0.999999
   discount: 0.99
   soft_update_tau: 0.001
