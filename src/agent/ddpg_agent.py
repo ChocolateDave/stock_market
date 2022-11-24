@@ -60,7 +60,7 @@ class DDPGAgent(BaseAgent):
         self.critic_opt = optim.Adam(
             self.critic.critic_net.parameters(),
             lr=critic_lr or learning_rate,
-            weight_decay=1e-2  # 1e-6 # 0 sometimes works better
+            weight_decay= 0#1e-2 <= current best# 1e-6 # 0 sometimes works better
         )
 
         self.training_step = 0
@@ -82,12 +82,13 @@ class DDPGAgent(BaseAgent):
             dones = dones.view(-1, 1)
 
         # Bellman error target
-        if next_acs is None:
-            next_acs = self.policy.get_action(next_obs,
-                                              explore=False,
-                                              target=True)
-        target = rews + self.critic.discount * (1. - dones) * \
-            self.critic.forward(next_obs, next_acs, target=True).detach()
+        with th.no_grad():
+            if next_acs is None:
+                next_acs = self.policy.get_action(next_obs,
+                                                    explore=False,
+                                                    target=True)
+            target = rews + self.critic.discount * (1. - dones) * \
+                self.critic.forward(next_obs, next_acs, target=True).detach()
         Q_vals = self.critic.forward(obs, acs, target=False)
         critic_loss = self.critic.loss(Q_vals, target.detach())
 
@@ -122,6 +123,14 @@ class DDPGAgent(BaseAgent):
     def eval_mode(self):
         self.policy.policy_net.eval()
         self.critic.critic_net.eval()
+
+    def get_V(self, 
+              obs: Tensor, 
+              explore: bool = False, 
+              target: bool = False) -> Tensor:
+        acs = self.policy.get_action(obs, explore=explore, target=target)
+        return self.critic.forward(obs, acs.detach())
+
 
 
 if __name__ == "__main__":

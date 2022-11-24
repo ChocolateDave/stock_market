@@ -11,7 +11,7 @@ print(sys.path)
 sys.path[0] = 'c:\\users\\scien\\onedrive\\desktop\\fa2022\\cs285\\stock_market'
 
 from src.utils import load_config
-from src.trainer.ddpg_trainer import DDPGTrainer
+from src.trainer.ddpg_irl_trainer import DDPGIRLTrainer
 import torch as th
 from gym.wrappers import RescaleAction
 import gym
@@ -32,7 +32,7 @@ def main(args: Mapping[str, Any]) -> None:
     print(action_space)
     env = RescaleAction(env, min_action=-1., max_action=1.)
     print(env.action_space)
-    trainer = DDPGTrainer(env, **args['Trainer'])
+    trainer = DDPGIRLTrainer(env, **args['Trainer'])
     trainer.train(args['execute_at_train'], args['Trainer']['save'])
 
 
