@@ -1,28 +1,277 @@
 # =============================================================================
-# @file   maddpg_trainer.py
+# @file   trainer.py
 # @author Juanwu Lu
-# @date   Oct-15-22
+# @date   Nov-28-22
 # =============================================================================
-"""Trainer for Multi-agent Deep Deterministic Policy Gradient."""
 from __future__ import annotations
 
+import logging
+import os
+import time
 from collections import defaultdict
-from os import path as osp
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch as th
+from gymnasium import Env
 from gymnasium.spaces import Box, Discrete, Space
 from gymnasium.spaces import Tuple as TupleSpace
 from pettingzoo import ParallelEnv
-from src.agent.ddpg_agent import DDPGAgent
-from src.memory.multi_replay_buffer import MADDPGReplayBuffer
-from src.trainer.base_trainer import BaseTrainer
-from src.types import OptInt, OptFloat, PathLike
-from src.utils import AverageMeterGroup
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+from src.ddpg import DDPGAgent
+from src.memory import MADDPGReplayBuffer, ReplayBuffer
+from src.types import LOG, OptFloat, OptInt, PathLike
+from src.utils import AverageMeterGroup
 
+# Global Variables
+CWD_DEFAULT = Path(os.path.abspath(__file__)).parents[1].joinpath('run_logs')
+LOGGER = logging.getLogger(__name__)
+
+
+# Base Trainer Class
+# ==================
+class BaseTrainer:
+
+    def explore(self) -> None:
+        """Exploration before training."""
+        raise NotImplementedError
+
+    def train_one_episode(self, episode: int) -> LOG:
+        """Train model for one episode."""
+        raise NotImplementedError
+
+    def exec_one_episode(self, episode: int = -1) -> LOG:
+        """Execute model for one episode."""
+        raise NotImplementedError
+
+    def __init__(self,
+                 max_episode_steps: OptInt = None,
+                 num_episodes: int = 1,
+                 num_warm_up_steps: OptInt = None,
+                 exp_name: str = 'default',
+                 work_dir: Optional[PathLike] = None,
+                 eval_frequency: OptInt = None) -> None:
+
+        self.max_episode_steps = max_episode_steps
+        self.num_episodes = num_episodes or 1
+        self.num_warm_up_steps = num_warm_up_steps
+        self.exp_name = exp_name
+        self.train_step: int = 1
+        self.eval_step: int = 1
+        self.eval_frequency = eval_frequency or -1
+
+        self.work_dir = work_dir or CWD_DEFAULT
+        dir_name = time.strftime("%d-%m-%Y_%H-%M-%S") + '_' + exp_name
+        self.log_dir = os.path.join(self.work_dir, dir_name, 'logs')
+        if not os.path.isdir(self.log_dir):
+            os.makedirs(self.log_dir)
+        self.ckpt_dir = os.path.join(self.work_dir, dir_name, 'checkpoint')
+        if not os.path.isdir(self.ckpt_dir):
+            os.makedirs(self.ckpt_dir)
+        self.img_dir = os.path.join(self.work_dir, dir_name, 'img')
+        if not os.path.isdir(self.img_dir):
+            os.makedirs(self.img_dir)
+        self.writer = SummaryWriter(self.log_dir)
+
+    def train(self) -> Any:
+        meter = AverageMeterGroup()
+
+        # Warm-up exploration before training
+        while self.train_step < self.num_warm_up_steps:
+            self.explore()
+
+        for episode in tqdm(range(1, self.num_episodes + 1),
+                            desc='Training Progress',
+                            position=0,
+                            leave=False):
+
+            log: LOG = self.train_one_episode(episode)
+            # Update episodic tracker
+            meter.update(log)
+            for key, val in meter.items():
+                key = 'Train/' + key
+                self.writer.add_scalar(key, val, episode)
+
+            if self.eval_frequency > 0:
+                if self.train_step % self.eval_frequency == 0:
+                    self.set_eval()
+                    mean_reward = 0.
+                    for i in range(20):
+                        log = self.exec_one_epoch(episode)
+                        mean_reward += log['eval_returns']
+                    log = {'mean_reward': mean_reward / 20}
+                    # print('log:', log)
+                    for key, val in log.items():
+                        key = 'Execution/' + key
+                        self.writer.add_scalar(key, val, episode)
+
+
+# DDPG Trainer Class
+# ==================
+class DDPGTrainer(BaseTrainer):
+
+    def __init__(self,
+                 agent: DDPGAgent,
+                 env: Env,
+                 buffer_size: int = 10000,
+                 batch_size: int = 64,
+                 device: th.device = th.device('cpu'),
+                 log_dir: str = 'logs/',
+                 eval_frequency: int = 1000,
+                 num_episodes: int = 20000,
+                 num_warm_up_steps: int = 1000,
+                 name: str = '',
+                 learning_rate: OptFloat = 1e-4,
+                 policy_lr: OptFloat = None,
+                 critic_lr: OptFloat = None,
+                 discount: OptFloat = 0.99,
+                 grad_clip: Optional[Tuple[float, float]] = None,
+                 soft_update_tau: OptFloat = 0.9,
+                 max_episode_steps: OptInt = None,
+                 seed: int = 42,
+                 **kwargs) -> None:
+        super().__init__(log_dir, max_episode_steps, num_episodes,
+                         num_warm_up_steps, name, eval_frequency)
+
+        # Retreive observation and action size
+        if len(env.observation_space.shape) > 2:
+            observation_size = env.observation_space
+        else:
+            observation_size = env.observation_space.shape[0]
+        if isinstance(env.action_space, Discrete):
+            action_size = env.action_space.n
+            self.discrete_action = True
+        else:
+            action_size = env.action_space.shape[0]
+            self.discrete_action = False
+
+        self.agent: DDPGAgent = DDPGAgent(observation_size=observation_size,
+                                          action_size=action_size,
+                                          discrete_action=self.discrete_action,
+                                          device=device,
+                                          policy_lr=policy_lr,
+                                          learning_rate=learning_rate,
+                                          critic_lr=critic_lr,
+                                          discount=discount,
+                                          grad_clip=grad_clip,
+                                          soft_update_tau=soft_update_tau)
+        self.batch_size = batch_size
+        self.buffer = ReplayBuffer(max_size=buffer_size)
+        self.env = env
+        self.seed = seed
+        self.env.reset(seed=self.seed)
+
+    def train_one_episode(self, episode: int) -> Any:
+        log = defaultdict(list)
+
+        # Initialize random process
+        self.agent.reset_noise()
+
+        # Receive the initial state
+        steps: int = 0
+        ob = self.env.reset()
+
+        while True:
+            with th.no_grad():
+                self.agent.eval_mode()
+
+                if self.steps_so_far < self.num_timesteps_before_training:
+                    ac = self.env.action_space.sample()
+                    ac_loc = [ac]
+                else:
+                    ac = self.agent.get_action(ob, explore=True, target=False)
+                    if self.discrete_action:
+                        # convert one-hot to integer
+                        ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
+                    else:
+                        ac_loc = ac.float().cpu().numpy()
+                    ac = ac.cpu().numpy()[0]
+
+                next_ob, rew, done, truncated, _ = self.env.step(ac_loc[0])
+                self.buffer.add_transition(
+                    ob, ac, next_ob, rew, done
+                )
+                log['episode_returns'].append(rew)
+                steps += 1
+                self.steps_so_far += 1
+                ob = next_ob
+                done = done or truncated
+
+            if len(self.buffer) > self.batch_size:
+                self.agent.train_mode()
+
+                obs, acs, next_obs, rews, dones = self.buffer.sample(
+                    self.batch_size, random=True
+                )
+                obs = th.from_numpy(obs).to(self.agent.device)
+                acs = th.from_numpy(acs).to(self.agent.device)
+                next_obs = th.from_numpy(next_obs).to(self.agent.device)
+                rews = th.from_numpy(rews).to(self.agent.device)
+                dones = th.from_numpy(dones).to(self.agent.device)
+
+                # Update critic network
+                critic_loss = self.agent.update_critic(
+                    obs, acs, next_obs, rews, dones)
+                log['critic_loss'].append(critic_loss)
+
+                # Update policy network
+                policy_loss = self.agent.update_policy(obs)
+                log['policy_loss'].append(policy_loss)
+
+                # Update target networks
+                self.agent.update_target()
+
+            if self.max_episode_steps:
+                done = done or steps > self.max_episode_steps
+
+            if done:
+                return {key: sum(value)
+                        if key == 'episode_returns'
+                        else sum(value) / steps
+                        for key, value in log.items()}
+
+    def exec_one_episode(self,
+                         episode: int = -1,
+                         seed: OptInt = None) -> Any:
+        seed = seed or self.seed
+        log = defaultdict(list)
+
+        # Receive the initial state
+        steps: int = 0
+        ob = self.env.reset()
+
+        self.agent.eval_mode()
+
+        while True:
+            with th.no_grad():
+                ac = self.agent.get_action(ob, explore=False, target=False)
+                if self.discrete_action:
+                    # convert one-hot to integer
+                    ac_loc = ac.max(1, keepdim=False)[1].cpu().numpy()
+                else:
+                    ac_loc = ac.float().cpu().numpy()
+                ob, rew, done, truncated, _ = self.env.step(ac_loc[0])
+                done = done or truncated
+
+                log['eval_returns'].append(rew)
+                steps += 1
+                # print(ac_loc[0])
+
+            if self.max_episode_steps:
+                done = steps > self.max_episode_steps or done
+
+            if done:
+                return {key: sum(value)
+                        if key == 'eval_returns'
+                        else sum(value) / steps
+                        for key, value in log.items()}
+
+
+# MADDPG Trainer Class
+# ====================
 class MADDPGTrainer(BaseTrainer):
 
     def __init__(self,
@@ -145,7 +394,7 @@ class MADDPGTrainer(BaseTrainer):
 
             self.train_step += 1
 
-    def train_one_episode(self, episode: int = 0) -> Dict[str, Any]:
+    def train_one_episode(self, episode: int = 0) -> LOG:
         logs = {agent_id: defaultdict(list) for agent_id in self.agents}
         episode_done: bool = False
         steps: int = 0
@@ -227,14 +476,18 @@ class MADDPGTrainer(BaseTrainer):
             if self.max_episode_steps:
                 episode_done = steps > self.max_episode_steps
 
-            # Save checkpoints
-            for agent_id, agent in self.agents.items():
-                agent.save(
-                    osp.join(
-                        self.ckpt_dir,
-                        '_'.join([self.exp_name, str(episode + 1)] + '.pt')
-                    )
+        # Step learning rate scheduler
+        for agent in self.agents.values():
+            agent.step_lr_scheduler()
+
+        # Save checkpoints at the end of the episode
+        for agent_id, agent in self.agents.items():
+            agent.save(
+                os.path.join(
+                    self.ckpt_dir,
+                    '_'.join([self.exp_name, str(episode + 1)]) + '.pt'
                 )
+            )
 
         return {agent_id: {key: sum(value)
                            if key == 'episode_returns'
@@ -246,7 +499,7 @@ class MADDPGTrainer(BaseTrainer):
         # TODO: Implement single epoch execution
         pass
 
-    def __init_env(self) -> Mapping[str, Tuple[int, int]]:
+    def __init_env(self) -> Dict[str, Tuple[int, int]]:
         # Initialize the multi-agent environment and retrieve information
         _ = self.env.reset(seed=self.seed)
 
