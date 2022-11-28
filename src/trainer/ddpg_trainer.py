@@ -29,13 +29,13 @@ class DDPGTrainer(BaseTrainer):
                  num_episodes: int = 20000,
                  num_warm_up_steps: int = 1000,
                  name: str = '',
-                 learning_rate: Optional[float] = 1e-4,
-                 policy_lr: Optional[float] = None,
-                 critic_lr: Optional[float] = None,
-                 discount: Optional[float] = 0.99,
+                 learning_rate: OptFloat = 1e-4,
+                 policy_lr: OptFloat = None,
+                 critic_lr: OptFloat = None,
+                 discount: OptFloat = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
-                 soft_update_tau: Optional[float] = 0.9,
-                 max_episode_steps: Optional[int] = None,
+                 soft_update_tau: OptFloat = 0.9,
+                 max_episode_steps: OptInt = None,
                  seed: int = 42,
                  **kwargs) -> None:
         super().__init__(log_dir, max_episode_steps, num_episodes,
@@ -69,7 +69,7 @@ class DDPGTrainer(BaseTrainer):
         self.seed = seed
         self.env.reset(seed=self.seed)
 
-    def train_one_episode(self, epoch: int, seed: Optional[int] = None) -> Any:
+    def train_one_episode(self, epoch: int, seed: OptInt = None) -> Any:
         seed = seed or self.seed
         log = defaultdict(list)
 
@@ -141,7 +141,7 @@ class DDPGTrainer(BaseTrainer):
 
     def exec_one_episode(self,
                          episode: int = -1,
-                         seed: Optional[int] = None) -> Any:
+                         seed: OptInt = None) -> Any:
         seed = seed or self.seed
         log = defaultdict(list)
 

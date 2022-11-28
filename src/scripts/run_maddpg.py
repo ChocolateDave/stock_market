@@ -37,7 +37,7 @@ def make_env(**kwargs) -> ParallelEnv:
 def main(args: Mapping[str, Any]) -> None:
     env = make_env(**args['Env'])
     trainer = MADDPGTrainer(env, **args['Trainer'])
-    trainer.train(args.get('execute_at_train', False))
+    trainer.train()
 
 
 if __name__ == '__main__':
@@ -51,10 +51,8 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch-size', type=int, help='Batch Size.')
     parser.add_argument('-n', '--num-episodes', type=int, help='Total epochs.')
     parser.add_argument('--discount', type=float, help='Discount Factor')
-    parser.add_argument('--log-dir', type=str, default='../logs',
-                        help='Logging direction.')
-    parser.add_argument('--execute-at-train', action='store_true',
-                        default=False, help='Evaluate along with training.')
+    parser.add_argument('--work-dir', type=str, default=None,
+                        help='Working directory.')
 
     args = vars(parser.parse_args())
     config = load_config(args['config'])

@@ -5,11 +5,11 @@
 # =============================================================================
 """Deep Deterministic Policy Gradient Q-function module"""
 from copy import deepcopy
-from typing import Optional
 
 import torch as th
 from src.critic.base_critic import BaseCritic
 from src.nn.ddpg_nn import CriticNet
+from src.types import OptFloat
 from torch import Tensor, nn
 
 
@@ -21,8 +21,8 @@ class DDPGCritic(BaseCritic):
                  device: th.device = th.device('cpu'),
                  discount: float = 0.99,
                  learning_rate: float = 1e-4,
-                 soft_update_tau: Optional[float] = None,
-                 grad_clip: Optional[float] = None,
+                 soft_update_tau: OptFloat = None,
+                 grad_clip: OptFloat = None,
                  huber_loss: bool = False) -> None:
         super().__init__()
 

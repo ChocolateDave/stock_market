@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping, Sequence, Optional, Union
 
 from src.nn.base_nn import BaseNN
 from src.nn.utils import activation_resolver, normalization_resolver
+from src.types import OptInt
 
 
 class MLP(BaseNN):
@@ -49,10 +50,10 @@ class MLP(BaseNN):
 
     def __init__(self,
                  hidden_list: Optional[Union[Sequence[int], int]] = None,
-                 in_feature: Optional[int] = None,
-                 hidden_size: Optional[int] = None,
-                 out_feature: Optional[int] = None,
-                 num_layers: Optional[int] = None,
+                 in_feature: OptInt = None,
+                 hidden_size: OptInt = None,
+                 out_feature: OptInt = None,
+                 num_layers: OptInt = None,
                  dropout: Optional[Union[float, Sequence[float]]] = 0.0,
                  act: Optional[Union[str, Callable]] = "relu",
                  act_first: bool = False,

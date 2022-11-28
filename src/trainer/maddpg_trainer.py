@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from os import path as osp
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import numpy as np
@@ -17,6 +18,7 @@ from pettingzoo import ParallelEnv
 from src.agent.ddpg_agent import DDPGAgent
 from src.memory.multi_replay_buffer import MADDPGReplayBuffer
 from src.trainer.base_trainer import BaseTrainer
+from src.types import OptInt, OptFloat, PathLike
 from src.utils import AverageMeterGroup
 from tqdm import tqdm
 
@@ -28,22 +30,24 @@ class MADDPGTrainer(BaseTrainer):
                  batch_size: int = 64,
                  buffer_size: int = 10000,
                  device: th.device = th.device('cpu'),
-                 log_dir: str = 'logs/',
-                 max_episode_steps: Optional[int] = None,
+                 max_episode_steps: OptInt = None,
                  num_episodes: int = 20000,
                  num_warm_up_steps: int = 1000,
-                 name: str = '',
-                 learning_rate: Optional[float] = 1e-4,
-                 policy_lr: Optional[float] = None,
-                 critic_lr: Optional[float] = None,
+                 exp_name: str = '',
+                 work_dir: Optional[PathLike] = None,
+                 eval_frequency: OptInt = None,
+                 learning_rate: OptFloat = 1e-4,
+                 policy_lr: OptFloat = None,
+                 critic_lr: OptFloat = None,
                  action_range: Optional[List[float]] = None,
-                 discount: Optional[float] = 0.99,
+                 discount: OptFloat = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
-                 soft_update_tau: Optional[float] = 0.9,
+                 soft_update_tau: OptFloat = 0.9,
                  seed: int = 42,
                  **kwargs) -> None:
         super().__init__(
-            log_dir, max_episode_steps, num_episodes, num_warm_up_steps, name
+            max_episode_steps, num_episodes, num_warm_up_steps,
+            exp_name, work_dir, eval_frequency
         )
 
         assert isinstance(env, ParallelEnv), TypeError(
@@ -102,7 +106,7 @@ class MADDPGTrainer(BaseTrainer):
 
         return step
 
-    def train(self, execution: bool = False) -> Any:
+    def train(self) -> Any:
         meters = {agent_id: AverageMeterGroup() for agent_id in self.agents}
 
         # Warm-up exploration before training
@@ -127,18 +131,21 @@ class MADDPGTrainer(BaseTrainer):
                     key = '/'.join([agent_id, 'Train', key])
                     self.writer.add_scalar(key, val, episode)
 
-            if execution:
-                self.set_eval()
-                logs = self.exec_one_episode(episode)
+            if self.eval_frequency > 0:
+                if self.eval_step % self.eval_frequency == 0:
+                    self.set_eval()
+                    logs = self.exec_one_episode(episode)
 
-                # Update episodic tracker
-                for agent_id, meter in meters.items():
-                    meter.update(logs[agent_id])
-                    for key, val in meter.items():
-                        key = '/'.join([agent_id, 'Train', key])
-                        self.writer.add_scalar(key, val, episode)
+                    # Update episodic tracker
+                    for agent_id, meter in meters.items():
+                        meter.update(logs[agent_id])
+                        for key, val in meter.items():
+                            key = '/'.join([agent_id, 'Train', key])
+                            self.writer.add_scalar(key, val, episode)
 
-    def train_one_episode(self, episode: int) -> Any:
+            self.train_step += 1
+
+    def train_one_episode(self, episode: int = 0) -> Dict[str, Any]:
         logs = {agent_id: defaultdict(list) for agent_id in self.agents}
         episode_done: bool = False
         steps: int = 0
@@ -220,13 +227,22 @@ class MADDPGTrainer(BaseTrainer):
             if self.max_episode_steps:
                 episode_done = steps > self.max_episode_steps
 
+            # Save checkpoints
+            for agent_id, agent in self.agents.items():
+                agent.save(
+                    osp.join(
+                        self.ckpt_dir,
+                        '_'.join([self.exp_name, str(episode + 1)] + '.pt')
+                    )
+                )
+
         return {agent_id: {key: sum(value)
                            if key == 'episode_returns'
                            else sum(value) / len(value)
                            for key, value in log.items()}
                 for agent_id, log in logs.items()}
 
-    def exec_one_episode(self, epoch: int = -1) -> Any:
+    def exec_one_episode(self, episode: int = -1) -> Any:
         # TODO: Implement single epoch execution
         pass
 

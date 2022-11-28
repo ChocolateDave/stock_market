@@ -8,16 +8,19 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime
+import time
 from os import path as osp
-from typing import Any, Mapping, Optional, Union
+from pathlib import Path
+from typing import Any, Mapping, Optional
 
+from src.types import OptInt, PathLike
 from src.utils import AverageMeterGroup
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-_PathLike = Union[str, 'os.PathLike[str]']
-_logger = logging.getLogger(__name__)
+# Global Variables
+CWD_DEFAULT = Path(osp.abspath(__file__)).parents[2].joinpath('run_logs')
+LOGGER = logging.getLogger(__name__)
 
 
 class BaseTrainer:
@@ -31,25 +34,35 @@ class BaseTrainer:
         raise NotImplementedError
 
     def __init__(self,
-                 log_dir: _PathLike = 'logs/',
-                 max_episode_steps: Optional[int] = None,
+                 max_episode_steps: OptInt = None,
                  num_episodes: int = 1,
-                 num_warm_up_steps: Optional[int] = None,
-                 name: str = '',
-                 eval_frequency: Optional[int] = 100) -> None:
+                 num_warm_up_steps: OptInt = None,
+                 exp_name: str = 'default',
+                 work_dir: Optional[PathLike] = None,
+                 eval_frequency: OptInt = None) -> None:
 
         self.max_episode_steps = max_episode_steps
         self.num_episodes = num_episodes or 1
         self.num_warm_up_steps = num_warm_up_steps
-        self.train_step: int = 0
-        self.eval_step: int = 0
-        self.eval_frequency = eval_frequency
+        self.exp_name = exp_name
+        self.train_step: int = 1
+        self.eval_step: int = 1
+        self.eval_frequency = eval_frequency or -1
 
-        now = datetime.now().strftime('%m-%d-%d_%H-%M-%S')
-        log_dir = osp.join(log_dir, f'{name:s}_{now:s}')
-        self.writer = SummaryWriter(log_dir)
+        self.work_dir = work_dir or CWD_DEFAULT
+        dir_name = time.strftime("%d-%m-%Y_%H-%M-%S") + '_' + exp_name
+        self.log_dir = osp.join(self.work_dir, dir_name, 'logs')
+        if not osp.isdir(self.log_dir):
+            os.makedirs(self.log_dir)
+        self.ckpt_dir = osp.join(self.work_dir, dir_name, 'checkpoint')
+        if not osp.isdir(self.ckpt_dir):
+            os.makedirs(self.ckpt_dir)
+        self.img_dir = osp.join(self.work_dir, dir_name, 'img')
+        if not osp.isdir(self.img_dir):
+            os.makedirs(self.img_dir)
+        self.writer = SummaryWriter(dir_name)
 
-    def train(self, execution: bool = False) -> Any:
+    def train(self) -> Any:
         meter = AverageMeterGroup()
         # Warm-up exploration before training
         while self.train_step < self.num_warm_up_steps:
@@ -66,15 +79,16 @@ class BaseTrainer:
             for key, val in meter.items():
                 key = 'Train/' + key
                 self.writer.add_scalar(key, val, episode)
-            # print('steps:', self.steps_so_far)
-            if episode % self.eval_frequency == 0 and execution:
-                self.set_eval()
-                mean_reward = 0.
-                for i in range(20):
-                    log = self.exec_one_epoch(episode)
-                    mean_reward += log['eval_returns']
-                log = {'mean_reward': mean_reward / 20}
-                # print('log:', log)
-                for key, val in log.items():
-                    key = 'Execution/' + key
-                    self.writer.add_scalar(key, val, episode)
+
+            if self.eval_frequency > 0:
+                if self.train_step % self.eval_frequency == 0:
+                    self.set_eval()
+                    mean_reward = 0.
+                    for i in range(20):
+                        log = self.exec_one_epoch(episode)
+                        mean_reward += log['eval_returns']
+                    log = {'mean_reward': mean_reward / 20}
+                    # print('log:', log)
+                    for key, val in log.items():
+                        key = 'Execution/' + key
+                        self.writer.add_scalar(key, val, episode)

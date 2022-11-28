@@ -7,17 +7,18 @@
 from __future__ import annotations
 
 import math
-from typing import Optional, Union
+from typing import Union
 
 import torch as th
 from src.nn.base_nn import BaseNN
+from src.types import OptInt
 from torch import Tensor
 from torch.nn import Linear, BatchNorm1d
 from torch.nn import functional as F
 
 
 def fanin_init(size: Union[int, th.Size],
-               fanin: Optional[int] = None) -> Tensor:
+               fanin: OptInt = None) -> Tensor:
     fanin = fanin or size[0]
     v = 1.0 / math.sqrt(fanin)
     return th.Tensor(size).uniform_(-v, v)

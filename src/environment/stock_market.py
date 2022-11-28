@@ -15,6 +15,7 @@ from gymnasium.utils import seeding
 from pettingzoo.utils.agent_selector import agent_selector
 from pettingzoo.utils.env import ParallelEnv
 from pettingzoo.utils.wrappers import BaseParallelWraper
+from src.types import OptInt
 
 # TODO (Maverick): market maker agent (maybe not needed)
 # TODO (Maverick): HMM
@@ -116,7 +117,7 @@ class StockMarketEnv(ParallelEnv):
         return self._action_spaces[agent]
 
     def reset(self,
-              seed: Optional[int] = None,
+              seed: OptInt = None,
               return_info: bool = True,
               options: Optional[Dict[str, Any]] = None
               ) -> Dict[str, Any]:

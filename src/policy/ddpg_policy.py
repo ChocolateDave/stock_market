@@ -13,6 +13,7 @@ import numpy as np
 import torch as th
 from src.nn.ddpg_nn import PolicyNet
 from src.policy.base_policy import BasePolicy
+from src.types import OptFloat
 from torch import Tensor, nn
 from torch.distributions import Distribution
 
@@ -71,8 +72,8 @@ class DDPGPolicy(BasePolicy):
                  action_range: Optional[List[float]] = None,
                  discrete_action: bool = False,
                  device: th.device = th.device('cpu'),
-                 soft_update_tau: Optional[float] = None,
-                 random_timesteps: Optional[float] = 1000,
+                 soft_update_tau: OptFloat = None,
+                 random_timesteps: OptFloat = 1000,
                  **kwargs) -> None:
         super().__init__()
 
