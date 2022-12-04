@@ -79,8 +79,8 @@ class PolicyNet(nn.Module):
     def __init__(self,
                  in_features: int,
                  out_features: int,
-                 num_hidden_1: int = 400,
-                 num_hidden_2: int = 300,
+                 num_hidden_1: int = 64,
+                 num_hidden_2: int = 64,
                  init_w: float = 3e-3) -> None:
         super().__init__()
 
@@ -215,8 +215,8 @@ class CriticNet(nn.Module):
     def __init__(self,
                  obs_in_features: int,
                  acs_in_features: int,
-                 num_hidden_1: int = 400,
-                 num_hidden_2: int = 300,
+                 num_hidden_1: int = 256,
+                 num_hidden_2: int = 64,
                  init_w: float = 3e-3) -> None:
         super().__init__()
 
