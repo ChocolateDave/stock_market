@@ -200,7 +200,7 @@ class StockMarketEnv(ParallelEnv):
         dones_n = {agent: True if rewards_n[agent] < 0.0 else False
                    for agent in self.agents}
         env_truncation = self.timestep >= self.max_cycles or \
-            all(dones_n.values())  # NOTE: terminates when all are done
+            any(dones_n.values())  # NOTE: terminates when all are done
         if env_truncation:
             self.agents = []
         truncated_n = {agent: env_truncation for agent in self.agents}
@@ -325,10 +325,10 @@ class StockMarketEnv(ParallelEnv):
         if isinstance(self.start_prices, float):
             self.current_price = self.start_prices
             other_stocks = np.clip(
-                np.random.normal(loc=self.start_prices,
-                                 scale=self.price_std,
-                                 size=(self.n_correlated_stocks +
-                                       self.n_uncorrelated_stocks,)),
+                self._np_rng.normal(loc=self.start_prices,
+                                    scale=self.price_std,
+                                    size=(self.n_correlated_stocks +
+                                          self.n_uncorrelated_stocks,)),
                 a_min=1.0, a_max=None
             )
         else:
@@ -356,11 +356,11 @@ class StockMarketEnv(ParallelEnv):
                                             size=(self.num_agents))
 
         # Randomize utility functions
-        self.eta = np.clip(
-            np.random.normal(loc=1.5, scale=1.5, size=(self.num_agents,)),
-            a_min=0, a_max=10
-        )
-        # self.eta = np.ones(shape=(self.num_agents, )) * 0.5
+        # self.eta = np.clip(
+        #     self._np_rng.normal(loc=1.5, scale=1.5, size=(self.num_agents,)),
+        #     a_min=0, a_max=10
+        # )
+        self.eta = np.ones(shape=[self.num_agents, ]) * 10.0
 
         self.timestep = 0
 

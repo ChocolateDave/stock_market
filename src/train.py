@@ -25,13 +25,19 @@ def main() -> None:
                         help='Maximum number of minutes for market episode.')
     parser.add_argument('--num-company', type=int, default=5,
                         help='Number of companies in the stock market.')
+    parser.add_argument('--start-prices', type=float, default=100.0,
+                        help='Start price of the stocks.')
+    parser.add_argument('--budget-discount', type=float, default=0.9,
+                        help='Budge discount factor over time.')
+    parser.add_argument('--worth-of-stocks', type=float, default=0.1,
+                        help='Factor related to the worth of stock.')
 
     # Trainer Arguments
     parser.add_argument('--action-range', type=float, nargs='+',
                         default=[-0.99999, 0.99999], help='Action range.')
     parser.add_argument('-bs', '--batch-size', type=int, default=64,
                         help='Batch size for training.')
-    parser.add_argument('--buffer-size', type=int, default=10000,
+    parser.add_argument('--buffer-size', type=int, default=100000,
                         help='An integer memory replay buffer size.')
     parser.add_argument('--gpu', action='store_true', default=False,
                         help='Enabling training on GPU devices.')
@@ -39,9 +45,9 @@ def main() -> None:
                         help='GPU device ids to train on.')
     parser.add_argument('--max-episode-steps', type=int, default=None,
                         help='Maximum number of steps for each episode.')
-    parser.add_argument('--num-episodes', type=int, default=2000,
+    parser.add_argument('--num-episodes', type=int, default=1000,
                         help='Total number of episodes to train.')
-    parser.add_argument('--num-warm-up-steps', type=int, default=10000,
+    parser.add_argument('--num-warm-up-steps', type=int, default=1000,
                         help='Total number of warm up steps before training.')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-4,
                         help='Unified learning rate for critic and policy.')
@@ -82,7 +88,8 @@ def main() -> None:
     env = LogarithmAndIntActionWrapper(StockMarketEnv(
         num_agents=args['num_agents'],
         max_cycles=args['max_cycles'],
-        num_company=args['num_company']
+        num_company=args['num_company'],
+        seed=args['seed']
     ))
     trainer = MADDPGTrainer(
         env=env,
