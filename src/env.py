@@ -17,10 +17,9 @@ from pettingzoo.utils.env import ParallelEnv
 from pettingzoo.utils.wrappers import BaseParallelWraper
 from src.types import OptInt
 
+
 # TODO (Maverick): market maker agent (maybe not needed)
 # TODO (Maverick): HMM
-
-
 class LogarithmAndIntActionWrapper(BaseParallelWraper):
 
     def __init__(self, env: ParallelEnv) -> None:
@@ -205,7 +204,9 @@ class StockMarketEnv(ParallelEnv):
         if env_truncation:
             self.agents = []
         truncated_n = {agent: env_truncation for agent in self.agents}
-        info = {agent: {} for agent in self.agents}
+        info = {'prices': self.current_price,
+                'uncorrelated_prices': self.uncorrelated_stocks,
+                'correlated_prices': self.correlated_stocks}
 
         return next_obs_n, rewards_n, dones_n, truncated_n, info
 

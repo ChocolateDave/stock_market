@@ -445,18 +445,7 @@ class DDPGAgent:
 
     def load(self, filepath: PathLike) -> None:
         state_dict = th.load(filepath, map_location=self.device)
-        self.critic.load_state_dict(state_dict['critic_state_dict'])
-        self.critic_opt.load_state_dict(state_dict['critic_opt_state_dict'])
-        if self.critic_lr_scheduler is not None:
-            self.critic_lr_scheduler.load_state_dict(
-                state_dict['critic_lr_scheduler_state_dict']
-            )
-        self.policy.load_state_dict('policy_state_dict')
-        self.policy_opt.load_state_dict('policy_opt_state_dict')
-        if self.policy_lr_scheduler is not None:
-            self.policy_lr_scheduler.load_state_dict(
-                state_dict['policy_lr_scheduler_state_dict']
-            )
+        self.load_state_dict(state_dict)
 
     def save(self, filepath: PathLike) -> None:
         th.save(self.state_dict, filepath)
