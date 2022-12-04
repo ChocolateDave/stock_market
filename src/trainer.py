@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 from src.ddpg import DDPGAgent
 from src.memory import MADDPGReplayBuffer, ReplayBuffer
-from src.typing import LOG, OptFloat, OptInt, PathLike
+from src.types import LOG, OptFloat, OptInt, PathLike
 from src.utils import AverageMeterGroup
 
 # Global Variables
