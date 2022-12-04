@@ -57,6 +57,8 @@ def main() -> None:
                         help='Customize experiment name for logging.')
     parser.add_argument('--eval-frequency', type=int, default=-1,
                         help='Evaluation frequency when training, -1 for not.')
+    parser.add_argument('--save-frequency', type=int, default=100,
+                        help='Checkpoint saving episodic frequency.')
     parser.add_argument('--seed', type=int, default=42,
                         help='Seed for training.')
     args = vars(parser.parse_args())
@@ -94,6 +96,7 @@ def main() -> None:
         exp_name=args['exp_name'],
         work_dir=args.get('work_dir'),
         eval_frequency=args['eval_frequency'],
+        save_frequency=args['save_frequency'],
         learning_rate=args['learning_rate'],
         critic_lr=args['critic_lr'],
         policy_lr=args['policy_lr'],

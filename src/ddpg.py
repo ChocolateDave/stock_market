@@ -14,7 +14,7 @@ import torch as th
 from torch import nn, optim
 from torch import distributions as D
 from torch.nn import functional as F
-from src.types import OptFloat, OptInt, OptTensor, PathLike
+from src.typing import OptFloat, OptInt, OptTensor, PathLike, StateDict
 
 
 # Ornstein Uhlenbeck Process
@@ -459,21 +459,7 @@ class DDPGAgent:
             )
 
     def save(self, filepath: PathLike) -> None:
-        state_dict = {
-            "critic_state_dict": self.critic.state_dict(),
-            "critic_opt_state_dict": self.critic_opt.state_dict(),
-            "critic_lr_scheduler_state_dict": (
-                self.critic_lr_scheduler.state_dict()
-                if self.critic_lr_scheduler is not None else None
-            ),
-            "policy_state_dict": self.policy.state_dict(),
-            "policy_opt_state_dict": self.policy_opt.state_dict(),
-            "policy_lr_scheduler_state_dict": (
-                self.policy_lr_scheduler.state_dict()
-                if self.policy_lr_scheduler is not None else None
-            )
-        }
-        th.save(state_dict, filepath)
+        th.save(self.state_dict, filepath)
 
     def set_train(self):
         self.policy.train()
@@ -488,3 +474,20 @@ class DDPGAgent:
             self.critic_lr_scheduler.step()
         if self.policy_lr_scheduler is not None:
             self.policy_lr_scheduler.step()
+
+    @property
+    def state_dict(self) -> StateDict:
+        return {
+            "critic_state_dict": self.critic.state_dict(),
+            "critic_opt_state_dict": self.critic_opt.state_dict(),
+            "critic_lr_scheduler_state_dict": (
+                self.critic_lr_scheduler.state_dict()
+                if self.critic_lr_scheduler is not None else None
+            ),
+            "policy_state_dict": self.policy.state_dict(),
+            "policy_opt_state_dict": self.policy_opt.state_dict(),
+            "policy_lr_scheduler_state_dict": (
+                self.policy_lr_scheduler.state_dict()
+                if self.policy_lr_scheduler is not None else None
+            )
+        }

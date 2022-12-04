@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 from src.ddpg import DDPGAgent
 from src.memory import MADDPGReplayBuffer, ReplayBuffer
-from src.types import LOG, OptFloat, OptInt, PathLike
+from src.typing import LOG, OptFloat, OptInt, PathLike
 from src.utils import AverageMeterGroup
 
 # Global Variables
@@ -35,7 +35,7 @@ LOGGER = logging.getLogger(__name__)
 # ==================
 class BaseTrainer:
 
-    def explore(self) -> None:
+    def explore(self) -> int:
         """Exploration before training."""
         raise NotImplementedError
 
@@ -53,15 +53,17 @@ class BaseTrainer:
                  num_warm_up_steps: OptInt = None,
                  exp_name: str = 'default',
                  work_dir: Optional[PathLike] = None,
-                 eval_frequency: OptInt = None) -> None:
+                 eval_frequency: OptInt = None,
+                 save_frequency: OptInt = None) -> None:
 
+        self.buffer = None
         self.max_episode_steps = max_episode_steps
         self.num_episodes = num_episodes or 1
         self.num_warm_up_steps = num_warm_up_steps
         self.exp_name = exp_name
-        self.train_step: int = 1
         self.eval_step: int = 1
         self.eval_frequency = eval_frequency or -1
+        self.save_frequency = save_frequency or -1
 
         self.work_dir = work_dir or CWD_DEFAULT
         dir_name = time.strftime("%d-%m-%Y_%H-%M-%S") + '_' + exp_name
@@ -80,8 +82,11 @@ class BaseTrainer:
         meter = AverageMeterGroup()
 
         # Warm-up exploration before training
-        while self.train_step < self.num_warm_up_steps:
-            self.explore()
+        pbar = tqdm(desc='Exploring...', total=self.num_warm_up_steps)
+        while len(self.buffer) < self.num_warm_up_steps:
+            steps = self.explore()
+            pbar.update(steps)
+        pbar.close()
 
         for episode in tqdm(range(1, self.num_episodes + 1),
                             desc='Training Progress',
@@ -114,16 +119,16 @@ class BaseTrainer:
 class DDPGTrainer(BaseTrainer):
 
     def __init__(self,
-                 agent: DDPGAgent,
                  env: Env,
                  buffer_size: int = 10000,
                  batch_size: int = 64,
                  device: th.device = th.device('cpu'),
                  log_dir: str = 'logs/',
                  eval_frequency: int = 1000,
+                 save_frequency: int = 100,
                  num_episodes: int = 20000,
                  num_warm_up_steps: int = 1000,
-                 name: str = '',
+                 exp_name: str = '',
                  learning_rate: OptFloat = 1e-4,
                  policy_lr: OptFloat = None,
                  critic_lr: OptFloat = None,
@@ -134,7 +139,8 @@ class DDPGTrainer(BaseTrainer):
                  seed: int = 42,
                  **kwargs) -> None:
         super().__init__(log_dir, max_episode_steps, num_episodes,
-                         num_warm_up_steps, name, eval_frequency)
+                         num_warm_up_steps, exp_name,
+                         eval_frequency, save_frequency)
 
         # Retreive observation and action size
         if len(env.observation_space.shape) > 2:
@@ -284,7 +290,8 @@ class MADDPGTrainer(BaseTrainer):
                  num_warm_up_steps: int = 1000,
                  exp_name: str = '',
                  work_dir: Optional[PathLike] = None,
-                 eval_frequency: OptInt = None,
+                 eval_frequency: OptInt = 1000,
+                 save_frequency: OptInt = 100,
                  learning_rate: OptFloat = 1e-4,
                  policy_lr: OptFloat = None,
                  critic_lr: OptFloat = None,
@@ -296,7 +303,7 @@ class MADDPGTrainer(BaseTrainer):
                  **kwargs) -> None:
         super().__init__(
             max_episode_steps, num_episodes, num_warm_up_steps,
-            exp_name, work_dir, eval_frequency
+            exp_name, work_dir, eval_frequency, save_frequency
         )
 
         assert isinstance(env, ParallelEnv), TypeError(
@@ -359,26 +366,41 @@ class MADDPGTrainer(BaseTrainer):
         meters = {agent_id: AverageMeterGroup() for agent_id in self.agents}
 
         # Warm-up exploration before training
-        print('Exploring...')
         self.num_warm_up_steps = self.num_warm_up_steps or self.batch_size
-        pbar = tqdm(total=self.num_warm_up_steps)
+        pbar = tqdm(desc='Exploring...', total=self.num_warm_up_steps)
         while len(self.buffer) < self.num_warm_up_steps:
             steps = self.explore()
             pbar.update(steps)
         pbar.close()
 
-        print('Training...')
+        LOGGER.info('Training...')
         for episode in tqdm(range(1, self.num_episodes + 1),
                             desc='Training Progress',
                             position=0,
                             leave=False):
             logs = self.train_one_episode(episode)
+
             # Update episodic tracker
             for agent_id, meter in meters.items():
                 meter.update(logs[agent_id])
                 for key, val in meter.items():
                     key = '/'.join([agent_id, 'Train', key])
                     self.writer.add_scalar(key, val, episode)
+
+            # Dumping state dictionary
+            if self.save_frequency > 0:
+                if episode % self.save_frequency == 0:
+                    state_dict = {
+                        agent_id: agent.state_dict
+                        for agent_id, agent in self.agents.items()
+                    }
+                    th.save(
+                        state_dict,
+                        os.path.join(
+                            self.ckpt_dir,
+                            '_'.join([self.exp_name, str(episode)]) + '.pt'
+                        )
+                    )
 
             if self.eval_frequency > 0:
                 if self.eval_step % self.eval_frequency == 0:
@@ -389,15 +411,13 @@ class MADDPGTrainer(BaseTrainer):
                     for agent_id, meter in meters.items():
                         meter.update(logs[agent_id])
                         for key, val in meter.items():
-                            key = '/'.join([agent_id, 'Train', key])
+                            key = '/'.join([agent_id, 'Eval', key])
                             self.writer.add_scalar(key, val, episode)
-
-            self.train_step += 1
 
     def train_one_episode(self, episode: int = 0) -> LOG:
         logs = {agent_id: defaultdict(list) for agent_id in self.agents}
         episode_done: bool = False
-        steps: int = 0
+        episode_steps: int = 0
         ob_n: Dict[str, np.ndarray] = self.env.reset()
         state: np.ndarray = self.env.state()
         for agent in self.agents.values():
@@ -470,24 +490,14 @@ class MADDPGTrainer(BaseTrainer):
                 # Update target networks
                 agent.update_target()
 
-            self.train_step += 1
-            steps += 1
+            episode_steps += 1
 
             if self.max_episode_steps:
-                episode_done = steps > self.max_episode_steps
+                episode_done = episode_steps > self.max_episode_steps
 
         # Step learning rate scheduler
         for agent in self.agents.values():
             agent.step_lr_scheduler()
-
-        # Save checkpoints at the end of the episode
-        for agent_id, agent in self.agents.items():
-            agent.save(
-                os.path.join(
-                    self.ckpt_dir,
-                    '_'.join([self.exp_name, str(episode + 1)]) + '.pt'
-                )
-            )
 
         return {agent_id: {key: sum(value)
                            if key == 'episode_returns'
