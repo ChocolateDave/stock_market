@@ -57,7 +57,7 @@ class StockMarketEnv(ParallelEnv):
                  max_shares: int = 100000,
                  start_prices: Union[float, Sequence[float]] = 100.0,
                  budget_range: Tuple[float, float] = (100.0, 10000.0),
-                 budget_discount: float = 0.9,
+                 budget_discount: float = 0.99,
                  step_size: float = 1.0,
                  price_std: float = 100.0,
                  noise_std: float = 10.0,
@@ -338,14 +338,14 @@ class StockMarketEnv(ParallelEnv):
         self.uncorrelated_stocks = other_stocks[self.n_correlated_stocks:]
 
         # Randomly create masks for agents
-        self.valid_mask = {agent: np.zeros([self.n_stocks, ], dtype='bool')
+        self.valid_mask = {agent: np.ones([self.n_stocks, ], dtype='bool')
                            for agent in self.agents}
         _idcs = self._np_rng.choice(2, self.num_agents).astype('bool')
         for _idx in _idcs.nonzero()[0]:
             self.valid_mask[self.agents[_idx]][
-                1:1+self.n_correlated_stocks] = True
+                1:1+self.n_correlated_stocks] = False
             self.valid_mask[self.agents[_idx]][
-                -self.n_uncorrelated_stocks:] = True
+                -self.n_uncorrelated_stocks:] = False
 
         # Starting budgets and shares
         self.budgets = self.budge_range[0] + self._np_rng.random(
