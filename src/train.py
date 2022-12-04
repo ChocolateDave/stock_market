@@ -89,6 +89,9 @@ def main() -> None:
         num_agents=args['num_agents'],
         max_cycles=args['max_cycles'],
         num_company=args['num_company'],
+        start_prices=args['start_prices'],
+        budget_discount=args['budget_discount'],
+        worth_of_stocks=args['worth_of_stocks'],
         seed=args['seed']
     ))
     trainer = MADDPGTrainer(
