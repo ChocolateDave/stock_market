@@ -328,7 +328,7 @@ class DDPGAgent:
                  policy_action_size: OptInt = None,
                  discrete_action: bool = False,
                  device: Optional[th.device] = None,
-                 learning_rate: OptFloat = None,
+                 learning_rate: OptFloat = 1e-3,
                  policy_lr: OptFloat = None,
                  critic_lr: OptFloat = None,
                  discount: OptFloat = 0.99,
@@ -460,6 +460,31 @@ class DDPGAgent:
 
     def save(self, filepath: PathLike) -> None:
         th.save(self.state_dict, filepath)
+
+    def load_state_dict(self, state_dict: StateDict) -> None:
+        if 'critic_state_dict' in state_dict:
+            self.critic.load_state_dict(state_dict['critic_state_dict'])
+        if 'critic_opt_state_dict' in state_dict:
+            self.critic_opt.load_state_dict(
+                state_dict['critic_opt_state_dict']
+            )
+        if 'critic_lr_scheduler_state_dict' in state_dict \
+                and self.critic_lr_scheduler is not None:
+            self.critic_lr_scheduler.load_state_dict(
+                state_dict['critic_lr_scheduler_state_dict']
+            )
+
+        if 'policy_state_dict' in state_dict:
+            self.policy.load_state_dict(state_dict['policy_state_dict'])
+        if 'policy_opt_state_dict' in state_dict:
+            self.policy_opt.load_state_dict(
+                state_dict['policy_opt_state_dict']
+            )
+        if 'policy_lr_scheduler_state_dict' in state_dict \
+                and self.policy_lr_scheduler is not None:
+            self.policy_lr_scheduler.load_state_dict(
+                state_dict['policy_lr_scheduler_state_dict']
+            )
 
     def set_train(self):
         self.policy.train()

@@ -10,13 +10,12 @@ import os
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch as th
 from gymnasium import Env
-from gymnasium.spaces import Box, Discrete, Space
-from gymnasium.spaces import Tuple as TupleSpace
+from gymnasium.spaces import Discrete
 from pettingzoo import ParallelEnv
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -24,7 +23,8 @@ from tqdm import tqdm
 from src.ddpg import DDPGAgent
 from src.memory import MADDPGReplayBuffer, ReplayBuffer
 from src.types import LOG, OptFloat, OptInt, PathLike
-from src.utils import AverageMeterGroup
+from src.utils import (AverageMeterGroup, get_agent_dims,
+                       process_sample_ac, process_step_ac)
 
 # Global Variables
 CWD_DEFAULT = Path(os.path.abspath(__file__)).parents[1].joinpath('run_logs')
@@ -313,21 +313,20 @@ class MADDPGTrainer(BaseTrainer):
         self.batch_size = batch_size
         self.device = device
         self.seed = seed
-        _agent_dim = self.__init_env()
+        agent_dims = get_agent_dims(self.env)
 
         self.agents: Dict[str, DDPGAgent] = {}
         if hasattr(self.env, 'state_space'):
             ob_n_dim = self.env.state_space.shape[0]
         else:
-            ob_n_dim = sum(val[0] for val in _agent_dim.values())
-        ac_n_dim = sum(val[1] for val in _agent_dim.values())
-        for agent_id, (ob_dim, ac_dim) in _agent_dim.items():
+            ob_n_dim = sum(val[0] for val in agent_dims.values())
+        ac_n_dim = sum(val[1] for val in agent_dims.values())
+        for agent_id, (ob_dim, ac_dim) in agent_dims.items():
             self.agents[agent_id] = DDPGAgent(critic_observation_size=ob_n_dim,
                                               policy_observation_size=ob_dim,
                                               critic_action_size=ac_n_dim,
                                               policy_action_size=ac_dim,
                                               action_range=action_range,
-                                              discrete_action=True,
                                               device=device,
                                               learning_rate=learning_rate,
                                               policy_lr=policy_lr,
@@ -346,7 +345,7 @@ class MADDPGTrainer(BaseTrainer):
             actions = {_id: self.env.action_space(_id).sample()
                        for _id in self.env.agents}
             ac_n = {
-                _id: self.process_sample_ac(ac, self.env.action_space(_id))
+                _id: process_sample_ac(ac, self.env.action_space(_id))
                 for _id, ac in actions.items()
             }
             # Step action and store transition
@@ -429,7 +428,7 @@ class MADDPGTrainer(BaseTrainer):
             for _id, ob in ob_n.items():
                 ob = th.from_numpy(ob).view(1, -1).float().to(self.device)
                 ac = self.agents[_id].get_action(ob, explore=True)
-                actions[_id] = self.process_forward_ac(
+                actions[_id] = process_step_ac(
                     ac, self.env.action_space(_id)
                 )
                 ac_n[_id] = ac.detach().cpu().numpy()
@@ -508,89 +507,3 @@ class MADDPGTrainer(BaseTrainer):
     def exec_one_episode(self, episode: int = -1) -> Any:
         # TODO: Implement single epoch execution
         pass
-
-    def __init_env(self) -> Dict[str, Tuple[int, int]]:
-        # Initialize the multi-agent environment and retrieve information
-        _ = self.env.reset(seed=self.seed)
-
-        _agent_dim = {}
-        for _id in self.env.agents:
-            if len(self.env.observation_space(_id).shape) > 2:
-                raise RuntimeError('Image observation not supported')
-            observation_size = self.env.observation_space(_id).shape[0]
-            _action_space = self.env.action_space(_id)
-            if isinstance(_action_space, TupleSpace):
-                action_size = 0
-                for _sub_space in _action_space:
-                    if isinstance(_sub_space, Discrete):
-                        if _sub_space.n > 10:
-                            # NOTE: discrete space too large
-                            action_size += 1
-                        else:
-                            action_size += _sub_space.n
-                    elif isinstance(_sub_space, Box):
-                        action_size += _sub_space.shape[0]
-                    else:
-                        raise TypeError('Invalid action space.')
-            else:
-                if isinstance(_action_space, Discrete):
-                    action_size = _action_space.n
-                elif isinstance(_action_space, Box):
-                    action_size = _action_space.shape
-                else:
-                    raise TypeError('Invalid action space.')
-            _agent_dim[_id] = [observation_size, action_size]
-
-        return _agent_dim
-
-    def process_forward_ac(self,
-                           data: th.Tensor,
-                           action_space: Space) -> Any:
-        if isinstance(action_space, Discrete):
-            if action_space.n > 10:
-                return data.item()
-            else:
-                return data.argmax(-1).item()
-        elif isinstance(action_space, Box):
-            return data.view(-1).detach().cpu().numpy()
-        elif isinstance(action_space, TupleSpace):
-            assert data.shape[-1] == len(action_space), \
-                ValueError('Not enough value to unpack.')
-            return tuple([self.process_forward_ac(data[:, i:i+1], space)
-                          for i, space in enumerate(action_space)])
-        else:
-            raise TypeError('Invalid action space.')
-
-    def process_sample_ac(self,
-                          data: Union[int, np.ndarray, Tuple],
-                          action_space: Space) -> np.ndarray:
-        if isinstance(action_space, Discrete):
-            if action_space.n > 10:
-                # NOTE: Handle large discrete space
-                return data
-            else:
-                return self.to_one_hot(data, action_space.n)
-        elif isinstance(action_space, Box):
-            return data
-        elif isinstance(action_space, TupleSpace):
-            out = np.zeros(shape=(1, len(action_space)))
-            for i, (ac, ac_space) in enumerate(zip(data, action_space)):
-                out[0, i] = self.process_sample_ac(ac, ac_space)
-            return out
-        else:
-            raise TypeError('Invalid action space')
-
-    @staticmethod
-    def to_one_hot(data: Union[int, np.ndarray],
-                   num_classes: int) -> np.ndarray:
-        if num_classes == -1:
-            num_classes = int(max(data) + 1)
-
-        if isinstance(data, int):
-            output = np.eye(num_classes)[data]
-        elif isinstance(data, np.ndarray):
-            raise NotImplementedError
-        else:
-            raise TypeError('Only support int and np.ndarray.')
-
-        return output
