@@ -155,15 +155,15 @@ def get_agent_dims(env: Union[AECEnv, ParallelEnv],
 
 
 def process_step_ac(data: Tensor,
-                    action_space: Space,
-                    discrete_truncate: int = 10) -> Any:
+                    action_space: Space) -> Any:
     if isinstance(action_space, Discrete):
-        if action_space.n > discrete_truncate:
-            return data.item()
-        else:
-            return data.argmax(-1).item()
+        data = data.item()
+        ac = action_space.start + int(action_space.n * data)
+        return ac
     elif isinstance(action_space, Box):
-        return data.view(-1).detach().cpu().numpy()
+        ac = data.view(-1).detach().cpu().numpy()
+        ac = np.exp(np.arctanh(np.clip(ac, -0.999999, 0.999999))) + 1.0
+        return ac
     elif isinstance(action_space, TupleSpace):
         assert data.shape[-1] == len(action_space), ValueError(
             f'Not enought values to unpack, expect {len(action_space):d}, '
@@ -176,15 +176,14 @@ def process_step_ac(data: Tensor,
 
 
 def process_sample_ac(data: Union[int, np.ndarray, Tuple],
-                      action_space: Space,
-                      discrete_truncate: int = 10) -> np.ndarray:
+                      action_space: Space) -> np.ndarray:
     if isinstance(action_space, Discrete):
-        if action_space.n > discrete_truncate:
-            return data
-        else:
-            return cat_to_one_hot(data, action_space.n)
+        # Categorical variables
+        ac = (data - action_space.start) / action_space.n
+        return ac
     elif isinstance(action_space, Box):
-        return data
+        ac = np.tanh(np.log(data - 1.0))
+        return ac
     elif isinstance(action_space, TupleSpace):
         output = np.zeros(shape=[1, len(action_space)])
         for i, (ac, ac_space) in enumerate(zip(data, action_space)):

@@ -14,60 +14,7 @@ from gymnasium.spaces import Tuple as TupleSpace
 from gymnasium.utils import seeding
 from pettingzoo.utils.agent_selector import agent_selector
 from pettingzoo.utils.env import ParallelEnv
-from pettingzoo.utils.wrappers import BaseParallelWraper
 from stock_market.types import OptInt
-
-
-# TODO (Maverick): market maker agent (maybe not needed)
-# TODO (Maverick): HMM
-class LogarithmAndIntActionWrapper(BaseParallelWraper):
-    env: StockMarketEnv
-
-    def __init__(self, env: StockMarketEnv) -> None:
-        super().__init__(env=env)
-        self.eps = 1e-8
-
-    def step(self,
-             actions: Dict[str, Tuple[np.ndarray, int]]
-             ) -> Tuple[Dict, Dict, Dict, Dict, Dict]:
-        budgets = self.env.budgets
-        shares = self.env.shares
-        agent_i = 0
-        wrapped_actions = {}
-        for agent, ac in actions.items():
-            b = budgets[agent_i]
-            s = shares[agent_i]
-            constrained_shares = self.remap_shares(b, s, ac[1])
-            constrained_price = self.remap_price(
-                b, s, constrained_shares, ac[0])
-            wrapped_actions[agent] = (constrained_price, constrained_shares)
-            agent_i += 1
-        return super().step(wrapped_actions)
-
-    def remap_shares(self,
-                     input: float,
-                     budget: float,
-                     curr_share: int) -> int:
-        # if for shares_held = 0
-        # needed to keep the budget above 1$
-        max_shares_can_buy = min(math.floor(
-            budget / (1. + self.eps)), self.env.max_shares)
-        shares = math.ceil((input + 1.) / 2. * (
-            max_shares_can_buy + curr_share) - curr_share - 0.5
-        )
-        return shares
-
-    def remap_price(self,
-                    input: float,
-                    budget: float,
-                    bid_share: int) -> float:
-
-        if bid_share > 0:
-            return math.min(
-                np.exp(np.arctanh(input)) + 1.0, budget / bid_share
-            )
-        else:
-            return np.exp(np.arctanh(input)) + 1.0
 
 
 class StockMarketEnv(ParallelEnv):
@@ -127,7 +74,7 @@ class StockMarketEnv(ParallelEnv):
             self._observation_spaces[agent] = Box(
                 low=1.0,
                 high=+float('inf'),
-                shape=(self.n_stocks,),
+                shape=(self.n_stocks + 2,),  # stock prices and budget
                 dtype=np.float32
             )
             self._action_spaces[agent] = TupleSpace((
@@ -140,6 +87,7 @@ class StockMarketEnv(ParallelEnv):
             shape=(self.n_stocks, ),
             dtype=np.float32
         )
+        self._update_action_space()
 
     def observation_space(self, agent: str) -> Space:
         return self._observation_spaces[agent]
@@ -155,6 +103,7 @@ class StockMarketEnv(ParallelEnv):
         if seed is not None:
             self.seed(seed=seed)
         self._reset_market()
+        self._update_action_space()
 
         # Concatenated the agent budgets and shares in the observations
         obs = {}
@@ -165,6 +114,7 @@ class StockMarketEnv(ParallelEnv):
                  [self.budgets[agent_i]], [self.shares[agent_i]]]
             )
             agent_i += 1
+
         return obs
 
     def seed(self, seed: Optional[seed] = None) -> None:
@@ -217,15 +167,16 @@ class StockMarketEnv(ParallelEnv):
             a_min=1.0, a_max=None
         )
         self.budgets = self.budgets + profits
-        self.shares = self.shares + delta_shares
+        self.shares = self.shares + delta_shares.astype(int)
         c = 1. + self.budget_discount * \
             self.budgets + self.shares * \
             self.current_price * self.worth_of_stocks
 
-        # Are proposed budgets and shares to sell/buy violating constraints?
-        potential_budgets = self.budgets - proposed_prices * proposed_shares
-        potential_shares_held = self.shares + proposed_shares
-        violations = (potential_budgets < 0.) + (potential_shares_held < 0.)
+        # NOTE: budgets and shares proposal violating constraints?
+        # potential_budgets = self.budgets - proposed_prices * proposed_shares
+        # potential_shares_held = self.shares + proposed_shares.astype(int)
+        # violations = (potential_budgets < 0.) + (potential_shares_held < 0.)
+        violations = (self.budgets < 0.0) + (self.shares < 0)
         rewards_n = {
             agent: -100.0 if violate else self.utility(c[i], self.eta[i])
             for i, (agent, violate) in enumerate(zip(self.agents, violations))
@@ -241,12 +192,13 @@ class StockMarketEnv(ParallelEnv):
                  [self.budgets[agent_i]], [self.shares[agent_i]]]
             )
             agent_i += 1
-        dones_n = {agent: True if rewards_n[agent] < 0.0 else False
-                   for agent in self.agents}
+        self._update_action_space()  # Update action space accordingly
+        dones_n = {agent: True if self.budgets[i] < 0.0 else False
+                   for i, agent in enumerate(self.agents)}
 
-        # env_truncation = self.timestep >= self.max_cycles or \
-        #    any(dones_n.values())  # NOTE: terminates when all are done
-        env_truncation = self.timestep >= self.max_cycles
+        env_truncation = self.timestep >= self.max_cycles or \
+            any(dones_n.values())  # NOTE: terminates when all are done
+        # env_truncation = self.timestep >= self.max_cycles
         truncated_n = {agent: env_truncation for agent in self.agents}
         if env_truncation:
             self.agents = []
@@ -383,7 +335,7 @@ class StockMarketEnv(ParallelEnv):
         self.correlated_stocks = other_stocks[:self.n_correlated_stocks]
         self.uncorrelated_stocks = other_stocks[self.n_correlated_stocks:]
 
-        # TODO: Randomly create masks for agents
+        # Randomly create masks for agents
         mask_size = self.n_stocks - 1
         upper = int(''.join(['1'] * mask_size), 2)
         rand_mask = self._np_rng.choice(
@@ -403,13 +355,26 @@ class StockMarketEnv(ParallelEnv):
                                             size=(self.num_agents))
 
         # Randomize utility functions
-        # self.eta = np.clip(
-        #     self._np_rng.normal(loc=1.5, scale=1.5, size=(self.num_agents,)),
-        #     a_min=0, a_max=10
-        # )
-        self.eta = np.ones(shape=[self.num_agents, ]) * 10.0
+        self.eta = np.clip(
+            self._np_rng.normal(loc=1.5, scale=1.5, size=(self.num_agents,)),
+            a_min=0, a_max=10
+        )
+        # self.eta = np.ones(shape=[self.num_agents, ]) * 10.0
 
         self.timestep = 0
+
+    def _update_action_space(self) -> None:
+        """Called to update action space of each agent accordingly."""
+        for i, agent in enumerate(self.agents):
+            budget = self.budgets[i]
+            min_share = -self.shares[i]  # one can at most sell all they have
+            min_share = min(min_share, 0)
+            max_share = math.floor(budget / (1.0 + 1e-8))  # at most buy at $1
+            max_share = max(max_share, 0)
+            self._action_spaces[agent] = TupleSpace((
+                Box(low=1.0, high=+float('inf'), shape=(1, )),
+                Discrete(max_share - min_share + 1, start=min_share)
+            ))
 
     @staticmethod
     def utility(c: float, eta: float, eps: float = 1e-6) -> float:

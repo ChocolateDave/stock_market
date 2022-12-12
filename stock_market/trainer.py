@@ -30,6 +30,8 @@ from stock_market.utils import (AverageMeterGroup, get_agent_dims,
 CWD_DEFAULT = Path(os.path.abspath(__file__)).parents[1].joinpath('run_logs')
 LOGGER = logging.getLogger(__name__)
 
+th.autograd.set_detect_anomaly(True)
+
 
 # Base Trainer Class
 # ==================
@@ -298,7 +300,7 @@ class MADDPGTrainer(BaseTrainer):
                  action_range: Optional[List[float]] = None,
                  discount: OptFloat = 0.99,
                  grad_clip: Optional[Tuple[float, float]] = None,
-                 soft_update_tau: OptFloat = 0.9,
+                 soft_update_tau: OptFloat = 0.01,
                  seed: int = 42,
                  **kwargs) -> None:
         super().__init__(
@@ -333,7 +335,7 @@ class MADDPGTrainer(BaseTrainer):
                                               critic_lr=critic_lr,
                                               discount=discount,
                                               grad_clip=grad_clip,
-                                              soft_update_tau=soft_update_tau,)
+                                              soft_update_tau=soft_update_tau)
         self.buffer = MADDPGReplayBuffer(self.agents, buffer_size)
 
     def explore(self) -> int:
@@ -427,7 +429,9 @@ class MADDPGTrainer(BaseTrainer):
             actions, ac_n = {}, {}
             for _id, ob in ob_n.items():
                 ob = th.from_numpy(ob).view(1, -1).float().to(self.device)
-                ac = self.agents[_id].get_action(ob, explore=True)
+                ac = self.agents[_id].get_action(
+                    ob, explore=True, target=False
+                )
                 actions[_id] = process_step_ac(
                     ac, self.env.action_space(_id)
                 )
@@ -445,8 +449,8 @@ class MADDPGTrainer(BaseTrainer):
             ob_n = next_ob_n
             state = next_state
 
-            # Train the agent
             for agent_id, agent in self.agents.items():
+                # Train the agent
                 states, next_states, obs_n, acs_n, \
                     next_obs_n, rew_n, dones_n = \
                     self.buffer.sample(self.batch_size, self.device)
@@ -466,7 +470,7 @@ class MADDPGTrainer(BaseTrainer):
                     obs_n[agent_id], acs_n[agent_id], \
                     next_ob_n[agent_id], rew_n[agent_id], dones_n[agent_id]
 
-                # Update critic network
+                # Update critic network and update actions
                 critic_loss = agent.update_critic(
                     obs=states,
                     acs=th.hstack(list(acs_n.values())),
@@ -477,9 +481,10 @@ class MADDPGTrainer(BaseTrainer):
                 )
                 logs[agent_id]['critic_loss'].append(critic_loss)
 
-                # Update actor network
-                new_action = agent.get_action(ob, False, target=False)
-                acs_n[agent_id] = new_action
+                # Update policy network and update target network
+                acs_n[agent_id] = agent.get_action(
+                    ob, explore=False, target=False
+                )
                 policy_loss = agent.update_policy(
                     obs=states,
                     acs=th.hstack(list(acs_n.values()))

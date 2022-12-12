@@ -11,7 +11,7 @@ from typing import List
 
 import torch as th
 
-from stock_market.env import LogarithmAndIntActionWrapper, StockMarketEnv
+from stock_market.env import StockMarketEnv
 from stock_market.trainer import MADDPGTrainer
 
 
@@ -35,9 +35,9 @@ def main() -> None:
     # Trainer Arguments
     parser.add_argument('--action-range', type=float, nargs='+',
                         default=[-0.99999, 0.99999], help='Action range.')
-    parser.add_argument('-bs', '--batch-size', type=int, default=64,
+    parser.add_argument('-bs', '--batch-size', type=int, default=128,
                         help='Batch size for training.')
-    parser.add_argument('--buffer-size', type=int, default=100000,
+    parser.add_argument('--buffer-size', type=int, default=50000,
                         help='An integer memory replay buffer size.')
     parser.add_argument('--gpu', action='store_true', default=False,
                         help='Enabling training on GPU devices.')
@@ -45,17 +45,17 @@ def main() -> None:
                         help='GPU device ids to train on.')
     parser.add_argument('--max-episode-steps', type=int, default=None,
                         help='Maximum number of steps for each episode.')
-    parser.add_argument('--num-episodes', type=int, default=1000,
+    parser.add_argument('--num-episodes', type=int, default=10000,
                         help='Total number of episodes to train.')
-    parser.add_argument('--num-warm-up-steps', type=int, default=1000,
+    parser.add_argument('--num-warm-up-steps', type=int, default=50000,
                         help='Total number of warm up steps before training.')
-    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-4,
+    parser.add_argument('-lr', '--learning-rate', type=float, default=0.01,
                         help='Unified learning rate for critic and policy.')
     parser.add_argument('-clr', '--critic-lr', type=float, default=None,
                         help='Learning rate for Critic module.')
     parser.add_argument('-plr', '--policy-lr', type=float, default=None,
                         help='Learning rate for Policy module.')
-    parser.add_argument('--discount', type=float, default=0.99,
+    parser.add_argument('--discount', type=float, default=0.95,
                         help='Discount factor for bellman target estimation.')
     parser.add_argument('--soft-update-tau', type=float, default=0.01,
                         help='Update factor for soft target network update.')
@@ -85,7 +85,7 @@ def main() -> None:
         else:
             os.environ['CUDA_VISIBLE_DEVICES'] = str(args['gpu_id'])[0]
 
-    env = LogarithmAndIntActionWrapper(StockMarketEnv(
+    env = StockMarketEnv(
         num_agents=args['num_agents'],
         max_cycles=args['max_cycles'],
         num_company=args['num_company'],
@@ -93,7 +93,7 @@ def main() -> None:
         budget_discount=args['budget_discount'],
         worth_of_stocks=args['worth_of_stocks'],
         seed=args['seed']
-    ))
+    )
     trainer = MADDPGTrainer(
         env=env,
         batch_size=args['batch_size'],

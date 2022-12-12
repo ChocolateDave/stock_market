@@ -91,9 +91,9 @@ class PolicyNet(nn.Module):
 
     def forward(self, obs: th.Tensor) -> th.Tensor:
         obs = obs.float()
-        obs = F.relu(self.fc_1(obs))
-        obs = F.relu(self.fc_2(obs))
-        acs = th.tanh(self.fc_3(obs))
+        out = F.relu(self.fc_1(obs))
+        out = F.relu(self.fc_2(out))
+        acs = th.tanh(self.fc_3(out))
 
         return acs
 
@@ -160,9 +160,12 @@ class DDPGPolicy(nn.Module):
             obs = obs.unsqueeze(0)
 
         if target:
-            return self.target_policy_net.forward(obs)
+            with th.no_grad():
+                acs = self.target_policy_net.forward(obs)
+            return acs
         else:
-            return self.policy_net.forward(obs)
+            acs = self.policy_net.forward(obs)
+            return acs
 
     def get_action(self,
                    obs: th.Tensor,
@@ -180,8 +183,10 @@ class DDPGPolicy(nn.Module):
         else:
             if explore:
                 # Explore continous action space with OUNoise
-                acs += th.from_numpy(max(self.eps, 0) *
-                                     self.exploration.sample()).to(acs.device)
+                acs = acs + th.tensor(
+                    max(self.eps, 0) * self.exploration.sample(),
+                    requires_grad=False, device=acs.device
+                )
                 self.eps -= self.delta_eps
             if self.act_rng:
                 acs = acs.clamp(*self.act_rng[:2])
@@ -380,7 +385,7 @@ class DDPGAgent:
 
     def get_action(self,
                    obs: Union[np.ndarray, th.Tensor],
-                   explore: bool = True,
+                   explore: bool = False,
                    target: bool = False) -> th.Tensor:
         if isinstance(obs, np.ndarray):
             obs = th.from_numpy(obs).to(self.device)
