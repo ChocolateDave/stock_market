@@ -383,18 +383,22 @@ class StockMarketEnv(ParallelEnv):
         self.correlated_stocks = other_stocks[:self.n_correlated_stocks]
         self.uncorrelated_stocks = other_stocks[self.n_correlated_stocks:]
 
-        # Randomly create masks for agents
-        self.valid_mask = {agent: np.ones([self.n_stocks, ], dtype='bool')
-                           for agent in self.agents}
-        for agent in self.agents:
-            self.valid_mask[agent][
-                1:] = self._np_rng.choice(2, self.n_stocks - 1).astype('bool')
+        # TODO: Randomly create masks for agents
+        mask_size = self.n_stocks - 1
+        upper = int(''.join(['1'] * mask_size), 2)
+        rand_mask = self._np_rng.choice(
+            a=upper, size=self.num_agents, replace=False
+        )
+        rand_mask = (((rand_mask[:, None] & (1 << np.arange(mask_size)))) > 0)
+        rand_mask = rand_mask.astype(bool)
+        self.valid_mask = {agent: np.concatenate([[True], rand_mask[i]], 0)
+                           for i, agent in enumerate(self.agents)}
 
         # Starting budgets and shares
         self.budgets = self.budge_range[0] + self._np_rng.random(
             size=(self.num_agents), dtype='float32'
         ) * (self.budge_range[1] - self.budge_range[0])
-        self.shares = self._np_rng.integers(low=1,  # TODO: move this to init
+        self.shares = self._np_rng.integers(low=1,
                                             high=self.max_shares,
                                             size=(self.num_agents))
 
@@ -406,8 +410,6 @@ class StockMarketEnv(ParallelEnv):
         self.eta = np.ones(shape=[self.num_agents, ]) * 10.0
 
         self.timestep = 0
-
-        print(self.budgets, self.shares)
 
     @staticmethod
     def utility(c: float, eta: float, eps: float = 1e-6) -> float:
