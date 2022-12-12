@@ -24,18 +24,43 @@ class LogarithmAndIntActionWrapper(BaseParallelWraper):
 
     def __init__(self, env: ParallelEnv) -> None:
         super().__init__(env=env)
+        self.eps = 1e-8
 
     def step(self,
              actions: Dict[str, Tuple[np.ndarray, int]]
              ) -> Tuple[Dict, Dict, Dict, Dict, Dict]:
-        actions = {
-            agent: (
-                np.exp(np.arctanh(ac[0])) + 1.0,              # price
-                math.ceil(self.env.max_shares * ac[1] - 0.5)  # share volume
-            )
-            for agent, ac in actions.items()
-        }
-        return super().step(actions)
+        budgets = self.env.budgets
+        shares = self.env.shares
+        agent_i = 0
+        wrapped_actions = {}
+        for agent, ac in actions.items():
+            b = budgets[agent_i]
+            s = shares[agent_i]
+            constrained_shares = self.remap_shares(b, s, ac[1])
+            constrained_price = self.remap_price(b, s, constrained_shares, ac[0])
+            wrapped_actions[agent] = (constrained_price, constrained_shares)
+            agent_i += 1
+        return super().step(wrapped_actions)
+        #actions = {
+        #    agent: (
+                #np.exp(np.arctanh(ac[0])) + 1.0,              # price, TODO: restrict to maximum price @David
+                #math.ceil(self.env.max_shares * ac[1] - 0.5)  # share volume 
+        #    )
+        #    for agent, ac in actions.items()
+        #}
+        #return super().step(actions)
+
+    def remap_shares(self, budget: float, shares_held: int, ac_1: float):
+        # if for shares_held = 0
+        max_shares_can_buy = min(math.floor(budget / (1. + self.eps)), self.env.max_shares) # needed to keep the budget above 1$
+        return math.ceil((ac_1 + 1.) / 2. * (max_shares_can_buy + shares_held) - shares_held - 0.5)
+
+    def remap_price(self, budget: float, shares_held: int, remapped_shares: int, ac_0: float):
+        if remapped_shares > 0:
+            return math.min(np.exp(np.arctanh(ac_0[0])) + 1.0, budget / remapped_shares)
+        else:
+            return np.exp(np.arctanh(ac_0[0])) + 1.0
+
 
 
 class StockMarketEnv(ParallelEnv):
@@ -124,10 +149,17 @@ class StockMarketEnv(ParallelEnv):
             self.seed(seed=seed)
         self._reset_market()
 
-        return {
-            agent: self.state() * self.valid_mask[agent]
-            for agent in self.agents
-        }
+        # Concatenated the agent budgets and shares in the observations
+        obs = {}
+        agent_i = 0
+        for agent in self.agents:
+            obs[agent] = np.concatenate((self.state() * self.valid_mask[agent], [self.budgets[agent_i]], [self.shares[agent_i]]))
+            agent_i += 1
+        return obs
+        #return {
+        #    agent: np.concatenate((np.self.state() * self.valid_mask[agent], ))
+        #    for agent in self.agents # TODO: agent: self.state() * valid_mask concatenate budget agent i/shares held i
+        #}
 
     def seed(self, seed: Optional[seed] = None) -> None:
         self._np_rng, seed = seeding.np_random(seed)
@@ -195,15 +227,21 @@ class StockMarketEnv(ParallelEnv):
 
         # Retreive values
         self.timestep += 1
-        next_obs_n = {agent: self.state() * self.valid_mask[agent]
-                      for agent in self.agents}
+        next_obs_n  = {}
+        agent_i = 0
+        for agent in self.agents:
+            next_obs_n[agent] = np.concatenate((self.state() * self.valid_mask[agent], [self.budgets[agent_i]], [self.shares[agent_i]]))
+            agent_i += 1
+        #next_obs_n = {agent: self.state() * self.valid_mask[agent] #TODO: as above
+        #              for agent in self.agents}
         dones_n = {agent: True if rewards_n[agent] < 0.0 else False
                    for agent in self.agents}
-        env_truncation = self.timestep >= self.max_cycles or \
-            any(dones_n.values())  # NOTE: terminates when all are done
+        #env_truncation = self.timestep >= self.max_cycles or \
+        #    any(dones_n.values())  # NOTE: terminates when all are done
+        env_truncation = self.timestep >= self.max_cycles
+        truncated_n = {agent: env_truncation for agent in self.agents}
         if env_truncation:
             self.agents = []
-        truncated_n = {agent: env_truncation for agent in self.agents}
         info = {'prices': self.current_price,
                 'uncorrelated_prices': self.uncorrelated_stocks,
                 'correlated_prices': self.correlated_stocks}
@@ -340,12 +378,9 @@ class StockMarketEnv(ParallelEnv):
         # Randomly create masks for agents
         self.valid_mask = {agent: np.ones([self.n_stocks, ], dtype='bool')
                            for agent in self.agents}
-        _idcs = self._np_rng.choice(2, self.num_agents).astype('bool')
-        for _idx in _idcs.nonzero()[0]:
-            self.valid_mask[self.agents[_idx]][
-                1:1+self.n_correlated_stocks] = False
-            self.valid_mask[self.agents[_idx]][
-                -self.n_uncorrelated_stocks:] = False
+        for agent in self.agents:
+            self.valid_mask[agent][
+                1:] = self._np_rng.choice(2, self.n_stocks - 1).astype('bool')
 
         # Starting budgets and shares
         self.budgets = self.budge_range[0] + self._np_rng.random(
@@ -363,6 +398,8 @@ class StockMarketEnv(ParallelEnv):
         self.eta = np.ones(shape=[self.num_agents, ]) * 10.0
 
         self.timestep = 0
+
+        print(self.budgets, self.shares)
 
     @staticmethod
     def utility(c: float, eta: float, eps: float = 1e-6) -> float:
