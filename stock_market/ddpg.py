@@ -14,7 +14,7 @@ import torch as th
 from torch import nn, optim
 from torch import distributions as D
 from torch.nn import functional as F
-from src.types import OptFloat, OptInt, OptTensor, PathLike, StateDict
+from stock_market.types import OptFloat, OptInt, OptTensor, PathLike, StateDict
 
 
 # Ornstein Uhlenbeck Process

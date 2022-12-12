@@ -20,11 +20,11 @@ from pettingzoo import ParallelEnv
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.ddpg import DDPGAgent
-from src.memory import MADDPGReplayBuffer, ReplayBuffer
-from src.types import LOG, OptFloat, OptInt, PathLike
-from src.utils import (AverageMeterGroup, get_agent_dims,
-                       process_sample_ac, process_step_ac)
+from stock_market.ddpg import DDPGAgent
+from stock_market.memory import MADDPGReplayBuffer, ReplayBuffer
+from stock_market.types import LOG, OptFloat, OptInt, PathLike
+from stock_market.utils import (AverageMeterGroup, get_agent_dims,
+                                process_sample_ac, process_step_ac)
 
 # Global Variables
 CWD_DEFAULT = Path(os.path.abspath(__file__)).parents[1].joinpath('run_logs')

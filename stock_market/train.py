@@ -11,8 +11,8 @@ from typing import List
 
 import torch as th
 
-from src.env import LogarithmAndIntActionWrapper, StockMarketEnv
-from src.trainer import MADDPGTrainer
+from stock_market.env import LogarithmAndIntActionWrapper, StockMarketEnv
+from stock_market.trainer import MADDPGTrainer
 
 
 def main() -> None:

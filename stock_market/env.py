@@ -15,7 +15,7 @@ from gymnasium.utils import seeding
 from pettingzoo.utils.agent_selector import agent_selector
 from pettingzoo.utils.env import ParallelEnv
 from pettingzoo.utils.wrappers import BaseParallelWraper
-from src.types import OptInt
+from stock_market.types import OptInt
 
 
 # TODO (Maverick): market maker agent (maybe not needed)
@@ -30,7 +30,9 @@ class LogarithmAndIntActionWrapper(BaseParallelWraper):
              ) -> Tuple[Dict, Dict, Dict, Dict, Dict]:
         actions = {
             agent: (
-                np.exp(np.arctanh(ac[0])) + 1.0,              # price
+                np.exp(np.arctanh(
+                    np.clip(ac[0], 0.999999, 0.9999)
+                )) + 1.0,              # price
                 math.ceil(self.env.max_shares * ac[1] - 0.5)  # share volume
             )
             for agent, ac in actions.items()
@@ -199,11 +201,12 @@ class StockMarketEnv(ParallelEnv):
                       for agent in self.agents}
         dones_n = {agent: True if rewards_n[agent] < 0.0 else False
                    for agent in self.agents}
-        env_truncation = self.timestep >= self.max_cycles or \
-            any(dones_n.values())  # NOTE: terminates when all are done
-        if env_truncation:
-            self.agents = []
+        # env_truncation = self.timestep >= self.max_cycles or \
+        # any(dones_n.values())  # NOTE: terminates when all are done
+        env_truncation = self.timestep >= self.max_cycles
         truncated_n = {agent: env_truncation for agent in self.agents}
+        if env_truncation is True:
+            self.agents = []
         info = {'prices': self.current_price,
                 'uncorrelated_prices': self.uncorrelated_stocks,
                 'correlated_prices': self.correlated_stocks}
