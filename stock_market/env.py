@@ -187,7 +187,7 @@ class StockMarketEnv(ParallelEnv):
         #     for i, (agent, violate) in enumerate(zip(self.agents, violations))  # noqa: E501
         # }
         rewards_n = {
-            agent: c[i] + potential_budgets[i]
+            agent: c[i] + max(0.0, potential_budgets[i])
             for i, agent in enumerate(self.agents)
         }
 
