@@ -45,7 +45,7 @@ def main() -> None:
                         help='GPU device ids to train on.')
     parser.add_argument('--max-episode-steps', type=int, default=None,
                         help='Maximum number of steps for each episode.')
-    parser.add_argument('--num-episodes', type=int, default=10000,
+    parser.add_argument('--num-episodes', type=int, default=2000,
                         help='Total number of episodes to train.')
     parser.add_argument('--num-warm-up-steps', type=int, default=50000,
                         help='Total number of warm up steps before training.')

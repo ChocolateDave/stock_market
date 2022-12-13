@@ -173,13 +173,16 @@ class StockMarketEnv(ParallelEnv):
             self.current_price * self.worth_of_stocks
 
         # NOTE: budgets and shares proposal violating constraints?
-        # potential_budgets = self.budgets - proposed_prices * proposed_shares
+        potential_budgets = self.budgets - proposed_prices * proposed_shares
         # potential_shares_held = self.shares + proposed_shares.astype(int)
         # violations = (potential_budgets < 0.) + (potential_shares_held < 0.)
-        violations = (self.budgets < 0.0) + (self.shares < 0)
+        # rewards_n = {
+        #     agent: -100.0 if violate else self.utility(c[i], self.eta[i])
+        #     for i, (agent, violate) in enumerate(zip(self.agents, violations))  # noqa: E501
+        # }
         rewards_n = {
-            agent: -100.0 if violate else self.utility(c[i], self.eta[i])
-            for i, (agent, violate) in enumerate(zip(self.agents, violations))
+            agent: c[i] + potential_budgets[i]
+            for i, agent in enumerate(self.agents)
         }
 
         # Retreive values
@@ -193,7 +196,8 @@ class StockMarketEnv(ParallelEnv):
             )
             agent_i += 1
         self._update_action_space()  # Update action space accordingly
-        dones_n = {agent: True if self.budgets[i] < 0.0 else False
+        violations = (self.budgets < 0.0) + (self.shares < 0)
+        dones_n = {agent: True if violations[i] else False
                    for i, agent in enumerate(self.agents)}
 
         env_truncation = self.timestep >= self.max_cycles or \
