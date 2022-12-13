@@ -225,7 +225,7 @@ def cat_to_one_hot(data: Union[int, np.ndarray],
     if num_classes == -1:
         num_classes = int(max(data) + 1)
 
-    if isinstance(data, int):
+    if isinstance(data, (int, np.int16, np.int32, np.int64, np.int128)):
         return np.eye(num_classes)[data]
     elif isinstance(data, np.ndarray):
         raise NotImplementedError(
