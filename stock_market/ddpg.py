@@ -176,7 +176,7 @@ class DDPGPolicy(nn.Module):
         if len(self.discrete_act_dims) > 0:
             acs[:, self.discrete_act_dims] = th.softmax(
                 acs[:, self.discrete_act_dims], dim=-1
-            )
+            ).float()
             if explore:
                 # Random sample from discrete action space with gumbel noise
                 acs[:, self.discrete_act_dims] = nn.functional.gumbel_softmax(
@@ -191,7 +191,7 @@ class DDPGPolicy(nn.Module):
         if len(self.continous_act_dims) > 0:
             acs[:, self.continous_act_dims] = th.tanh(
                 acs[:, self.continous_act_dims]
-            )
+            ).float()
             if explore:
                 # Explore continous action space with OUNoise
                 acs[:, self.continous_act_dims] += th.tensor(
