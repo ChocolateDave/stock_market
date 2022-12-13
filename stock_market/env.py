@@ -77,9 +77,13 @@ class StockMarketEnv(ParallelEnv):
                 shape=(self.n_stocks + 2,),  # stock prices and budget
                 dtype=np.float32
             )
+            # self._action_spaces[agent] = TupleSpace((
+            #     Box(low=1.0, high=+float('inf'), shape=(1, )),
+            #     Discrete(2 * max_shares + 1, start=-max_shares)
+            # ))
             self._action_spaces[agent] = TupleSpace((
                 Box(low=1.0, high=+float('inf'), shape=(1, )),
-                Discrete(2 * max_shares + 1, start=-max_shares)
+                Discrete(n=3, start=-1)
             ))
         self._state_space = Box(
             low=1.0,
@@ -87,7 +91,7 @@ class StockMarketEnv(ParallelEnv):
             shape=(self.n_stocks, ),
             dtype=np.float32
         )
-        self._update_action_space()
+        # self._update_action_space()
 
     def observation_space(self, agent: str) -> Space:
         return self._observation_spaces[agent]
@@ -103,7 +107,7 @@ class StockMarketEnv(ParallelEnv):
         if seed is not None:
             self.seed(seed=seed)
         self._reset_market()
-        self._update_action_space()
+        # self._update_action_space()
 
         # Concatenated the agent budgets and shares in the observations
         obs = {}
@@ -135,8 +139,10 @@ class StockMarketEnv(ParallelEnv):
              actions: Dict[str, Tuple[np.ndarray, int]]
              ) -> Tuple[Dict, Dict, Dict, Dict, Dict]:
         proposed_prices = np.hstack([ac[0] for ac in actions.values()])
-        proposed_shares = np.asarray([ac[1] for ac in actions.values()],
-                                     dtype="float32")
+        proposed_shares = np.asarray(
+            [ac[1] * self.shares[i] for i, ac in enumerate(actions.values())],
+            dtype="int32"
+        )
         prev_price = self.current_price
 
         # Perform Market Clearing
@@ -195,7 +201,7 @@ class StockMarketEnv(ParallelEnv):
                  [self.budgets[agent_i]], [self.shares[agent_i]]]
             )
             agent_i += 1
-        self._update_action_space()  # Update action space accordingly
+        # self._update_action_space()  # Update action space accordingly
         violations = (self.budgets < 0.0) + (self.shares < 0)
         dones_n = {agent: True if violations[i] else False
                    for i, agent in enumerate(self.agents)}

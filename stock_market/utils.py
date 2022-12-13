@@ -112,7 +112,7 @@ def unnormalize(inputs: Union[np.ndarray, Tensor],
 
 
 def get_agent_dims(env: Union[AECEnv, ParallelEnv],
-                   discrete_truncate: int = 10) -> Dict[str, Tuple[int, int]]:
+                   discrete_truncate: int = 3) -> Dict[str, Tuple[int, int]]:
     assert isinstance(env, (AECEnv, ParallelEnv)), TypeError(
         f'Expect multi-agent environment, but got {type(env):s}'
     )
@@ -155,20 +155,41 @@ def get_agent_dims(env: Union[AECEnv, ParallelEnv],
 
 
 def process_step_ac(data: Tensor,
-                    action_space: Space) -> Any:
+                    action_space: Space,
+                    discrete_truncate: int = 3) -> Any:
     if isinstance(action_space, Discrete):
-        data = data.item()
-        ac = action_space.start + int(action_space.n * data)
+        if action_space.n > discrete_truncate:
+            # large discrete action space
+            ac = action_space.start + int(action_space.n * data.item())
+        else:
+            # otherwise
+            ac = data.argmax(-1).item()
         return ac
     elif isinstance(action_space, Box):
         ac = data.view(-1).detach().cpu().numpy()
         ac = np.exp(np.arctanh(np.clip(ac, -0.999999, 0.999999))) + 1.0
         return ac
     elif isinstance(action_space, TupleSpace):
-        assert data.shape[-1] == len(action_space), ValueError(
-            f'Not enought values to unpack, expect {len(action_space):d}, '
-            f'but got {data.shape[-1]:d}.'
-        )
+        idx: int = 0
+        ac = []
+        for sub_space in action_space:
+            if isinstance(sub_space, Box):
+                ac.append(process_step_ac(
+                    data[:, idx:idx+np.prod(sub_space.shape)],
+                    sub_space
+                ))
+                idx += np.prod(sub_space.shape)
+            if isinstance(sub_space, Discrete):
+                if sub_space.n > discrete_truncate:
+                    ac.append(process_step_ac(
+                        data[:, idx:idx+1],
+                        sub_space
+                    ))
+                else:
+                    ac.append(process_step_ac(
+                        data[:, idx:idx+sub_space.n],
+                        sub_space
+                    ))
         return tuple([process_step_ac(data[:, i:i+1], space)
                       for i, space in enumerate(action_space)])
     else:
@@ -176,18 +197,24 @@ def process_step_ac(data: Tensor,
 
 
 def process_sample_ac(data: Union[int, np.ndarray, Tuple],
-                      action_space: Space) -> np.ndarray:
+                      action_space: Space,
+                      discrete_truncate: int = 3) -> np.ndarray:
     if isinstance(action_space, Discrete):
         # Categorical variables
-        ac = (data - action_space.start) / action_space.n
+        if action_space.n > discrete_truncate:
+            # large discrete action space
+            ac = (data - action_space.start) / action_space.n
+        else:
+            ac = cat_to_one_hot(data, action_space.n)
         return ac
     elif isinstance(action_space, Box):
         ac = np.tanh(np.log(data - 1.0))
         return ac
     elif isinstance(action_space, TupleSpace):
-        output = np.zeros(shape=[1, len(action_space)])
-        for i, (ac, ac_space) in enumerate(zip(data, action_space)):
-            output[0, i] = process_sample_ac(ac, ac_space)
+        output = []
+        for ac, ac_space in zip(data, action_space):
+            output.append(process_sample_ac(ac, ac_space))
+        output = np.hstack(output)[None, :]
         return output
     else:
         raise TypeError(f'Unsupported action space {action_space}.')

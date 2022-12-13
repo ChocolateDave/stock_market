@@ -11,6 +11,8 @@ from typing import List, Optional, Union
 
 import numpy as np
 import torch as th
+from gymnasium.spaces import Box, Discrete, Space
+from gymnasium.spaces import Tuple as TupleSpace
 from torch import nn, optim
 from torch import distributions as D
 from torch.nn import functional as F
@@ -93,7 +95,7 @@ class PolicyNet(nn.Module):
         obs = obs.float()
         out = F.relu(self.fc_1(obs))
         out = F.relu(self.fc_2(out))
-        acs = th.tanh(self.fc_3(out))
+        acs = self.fc_3(out)
 
         return acs
 
@@ -124,9 +126,8 @@ class DDPGPolicy(nn.Module):
 
     def __init__(self,
                  observation_size: int,
-                 action_size: int,
+                 action_space: Space,
                  action_range: Optional[List[float]] = None,
-                 discrete_action: bool = False,
                  device: th.device = th.device('cpu'),
                  soft_update_tau: OptFloat = None,
                  random_timesteps: OptFloat = 1000,
@@ -134,10 +135,12 @@ class DDPGPolicy(nn.Module):
         super().__init__()
 
         self.obs_size = observation_size
-        self.act_size = action_size
+        self.continous_act_dims = []
+        self.discrete_act_dims = []
+        self.get_action_size(action_space)
         self.act_rng = action_range
         self.soft_update_tau = soft_update_tau
-        self.policy_net = PolicyNet(observation_size, action_size).to(device)
+        self.policy_net = PolicyNet(observation_size, self.act_size).to(device)
         self.target_policy_net = deepcopy(self.policy_net).to(device)
 
         self.target_policy_net.hard_update(self.policy_net, False)
@@ -149,11 +152,8 @@ class DDPGPolicy(nn.Module):
         self.eps = 1.0
 
         # Exploration
-        self.discrete_action = discrete_action
-        if discrete_action:
-            self.exploration = 0.3  # epsilon-greedy initial value
-        else:
-            self.exploration = OUProcess(action_size)
+        self.discrete_exploration = 0.3  # epsilon-greedy initial value
+        self.continous_exploration = OUProcess(len(self.continous_act_dims))
 
     def forward(self, obs: th.Tensor, target: bool = False) -> D.Distribution:
         if len(obs.shape) == 1:
@@ -171,37 +171,84 @@ class DDPGPolicy(nn.Module):
                    obs: th.Tensor,
                    explore: bool = True,
                    target: bool = False) -> th.Tensor:
-        acs: th.Tensor = self.forward(obs, target)
+        acs: th.Tensor = self.forward(obs, target)  # shape: [B, Na]
 
-        if self.discrete_action:
+        if len(self.discrete_act_dims) > 0:
+            acs[:, self.discrete_act_dims] = th.softmax(
+                acs[:, self.discrete_act_dims], dim=-1
+            )
             if explore:
                 # Random sample from discrete action space with gumbel noise
-                acs = nn.functional.gumbel_softmax(acs, hard=True)
+                acs[:, self.discrete_act_dims] = nn.functional.gumbel_softmax(
+                    acs[:, self.discrete_act_dims], hard=True
+                )
             else:
-                acs = (acs == acs.max(1, keepdim=True)[0]).float()
+                acs[:, self.discrete_act_dims] = (
+                    acs[:, self.discrete_act_dims] ==
+                    acs[:, self.discrete_act_dims].max(1, keepdim=True)[0]
+                ).float()
 
-        else:
+        if len(self.continous_act_dims) > 0:
+            acs[:, self.continous_act_dims] = th.tanh(
+                acs[:, self.continous_act_dims]
+            )
             if explore:
                 # Explore continous action space with OUNoise
-                acs = acs + th.tensor(
-                    max(self.eps, 0) * self.exploration.sample(),
+                acs[:, self.continous_act_dims] += th.tensor(
+                    max(self.eps, 0) * self.continous_exploration.sample(),
                     requires_grad=False, device=acs.device
                 )
                 self.eps -= self.delta_eps
             if self.act_rng:
-                acs = acs.clamp(*self.act_rng[:2])
+                acs[:, self.continous_act_dims] = th.clamp(
+                    acs[:, self.continous_act_dims],
+                    min=self.act_rng[0], max=self.act_rng[1]
+                )
 
         return acs
 
+    def get_action_size(self, action_space: Space) -> None:
+        self.act_size = 0
+        if isinstance(action_space, TupleSpace):
+            for sub_space in action_space:
+                if isinstance(sub_space, Box):
+                    self.continous_act_dims += [
+                        self.act_size + i
+                        for i in range(np.prod(sub_space.shape))
+                    ]
+                    self.act_size += np.prod(sub_space.shape)
+                elif isinstance(sub_space, Discrete):
+                    if sub_space.n > 3:
+                        self.discrete_act_dims += [self.act_size]
+                        self.act_size += 1
+                    else:
+                        self.discrete_act_dims += [
+                            self.act_size + i for i in range(sub_space.n)
+                        ]
+                        self.act_size += sub_space.n
+
+        else:
+            if isinstance(action_space, Box):
+                self.act_size = np.prod(action_space.shape)
+                self.continous_act_dims += [
+                    i for i in range(np.prod(action_space.shape))
+                ]
+            elif isinstance(action_space, Discrete):
+                if action_space.n > 3:
+                    self.act_size = 1
+                    self.discrete_act_dims += [0]
+                else:
+                    self.act_size = action_space.n
+                    self.discrete_act_dims += [
+                        i for i in range(action_space.n)
+                    ]
+
     def reset_noise(self) -> None:
-        if not self.discrete_action:
-            self.exploration.reset()
+        self.continous_exploration.reset()
 
     def scale_noise(self, scale: float) -> None:
-        if self.discrete_action:
-            self.exploration = scale
-        else:
-            self.exploration.scale = scale
+        self.discrete_exploration = scale
+        self.continous_exploration.scale = scale
 
     def sync(self, non_blocking: bool = False) -> None:
         if self.soft_update_tau is None:
@@ -324,13 +371,12 @@ class DDPGCritic(nn.Module):
 class DDPGAgent:
 
     def __init__(self,
+                 action_space: Space,
                  observation_size: OptInt = None,
                  critic_observation_size: OptInt = None,
                  policy_observation_size: OptInt = None,
-                 action_size: OptInt = None,
                  action_range: Optional[List[float]] = None,
                  critic_action_size: OptInt = None,
-                 policy_action_size: OptInt = None,
                  discrete_action: bool = False,
                  device: Optional[th.device] = None,
                  learning_rate: OptFloat = 1e-3,
@@ -347,7 +393,7 @@ class DDPGAgent:
         self.device = device
         self.policy: DDPGPolicy = DDPGPolicy(
             observation_size=observation_size or policy_observation_size,
-            action_size=action_size or policy_action_size,
+            action_space=action_space,
             action_range=action_range,
             discrete_action=discrete_action,
             device=device,
@@ -363,7 +409,7 @@ class DDPGAgent:
 
         self.critic: DDPGCritic = DDPGCritic(
             observation_size=observation_size or critic_observation_size,
-            action_size=action_size or critic_action_size,
+            action_size=critic_action_size or self.policy.act_size,
             device=device,
             discount=discount,
             learning_rate=critic_lr or learning_rate,

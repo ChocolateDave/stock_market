@@ -323,19 +323,20 @@ class MADDPGTrainer(BaseTrainer):
         else:
             ob_n_dim = sum(val[0] for val in agent_dims.values())
         ac_n_dim = sum(val[1] for val in agent_dims.values())
-        for agent_id, (ob_dim, ac_dim) in agent_dims.items():
-            self.agents[agent_id] = DDPGAgent(critic_observation_size=ob_n_dim,
-                                              policy_observation_size=ob_dim,
-                                              critic_action_size=ac_n_dim,
-                                              policy_action_size=ac_dim,
-                                              action_range=action_range,
-                                              device=device,
-                                              learning_rate=learning_rate,
-                                              policy_lr=policy_lr,
-                                              critic_lr=critic_lr,
-                                              discount=discount,
-                                              grad_clip=grad_clip,
-                                              soft_update_tau=soft_update_tau)
+        for agent_id, (ob_dim, _) in agent_dims.items():
+            self.agents[agent_id] = DDPGAgent(
+                action_space=self.env.action_space(agent_id),
+                critic_observation_size=ob_n_dim,
+                policy_observation_size=ob_dim,
+                critic_action_size=ac_n_dim,
+                action_range=action_range,
+                device=device,
+                learning_rate=learning_rate,
+                policy_lr=policy_lr,
+                critic_lr=critic_lr,
+                discount=discount,
+                grad_clip=grad_clip,
+                soft_update_tau=soft_update_tau)
         self.buffer = MADDPGReplayBuffer(self.agents, buffer_size)
 
     def explore(self) -> int:
