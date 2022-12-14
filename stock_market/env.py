@@ -33,7 +33,7 @@ class StockMarketEnv(ParallelEnv):
                  num_company: int = 5,
                  num_correlated_stocks: int = 19,
                  num_uncorrelated_stocks: int = 10,
-                 max_shares: int = 100000,
+                 max_shares: int = 1000,
                  start_prices: Union[float, Sequence[float]] = 100.0,
                  budget_range: Tuple[float, float] = (100.0, 10000.0),
                  budget_discount: float = 0.99,
@@ -172,10 +172,9 @@ class StockMarketEnv(ParallelEnv):
             ),
             a_min=1.0, a_max=None
         )
-        self.budgets = self.budgets + profits
+        self.budgets = self.budget_discount * self.budgets + profits
         self.shares = self.shares + delta_shares.astype(int)
-        c = 1. + self.budget_discount * \
-            self.budgets + self.shares * \
+        c = 1. + self.budgets + self.shares * \
             self.current_price * self.worth_of_stocks
 
         # NOTE: budgets and shares proposal violating constraints?
@@ -357,12 +356,13 @@ class StockMarketEnv(ParallelEnv):
                            for i, agent in enumerate(self.agents)}
 
         # Starting budgets and shares
-        self.budgets = self.budge_range[0] + self._np_rng.random(
-            size=(self.num_agents), dtype='float32'
-        ) * (self.budge_range[1] - self.budge_range[0])
         self.shares = self._np_rng.integers(low=1,
                                             high=self.max_shares,
                                             size=(self.num_agents))
+        self.budgets = self.shares * self.current_price + self._np_rng.random(
+            size=(self.num_agents), dtype='float32'
+        ) * (self.budge_range[1] - self.budge_range[0])
+        
 
         # Randomize utility functions
         self.eta = np.clip(
