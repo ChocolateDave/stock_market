@@ -1,5 +1,7 @@
 # Multi-Agent Reinforcement Learning for Assumption-Free Stock Market Modeling
 
+[![DOI](https://zenodo.org/badge/541341881.svg)](https://zenodo.org/badge/latestdoi/541341881)
+
 An assumption-free microscopic stock market model built upon multi-agent reinforcement learning.
 
 This is a final project for the course CS285 Deep Reinforcement Learning, Decision Making, and Control at UC Berkeley. Please see our [final report](docs/final.pdf) for more details about this project.
@@ -41,6 +43,21 @@ We provide three scripts for running our codes on different settings.
     python stock_market/train.py <$ARGUMENTS>
     ```
 
+## Citation
+
+If you use this source code, please cite it using bibtex as below.
+
+```bibtex
+@misc{Maverick2013,
+  author = {Maverick, Zhang and Juanwu Lu},
+  title = {Multi-Agent Reinforcement Learning for Assumption-Free Stock Market Modeling},
+  year = {2022},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/ChocolateDave/stock_market}},
+  commit = {2b675bac077bc695048ce0072f254de25c898050}
+}
+```
 
 ## License
 
