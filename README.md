@@ -1,5 +1,6 @@
 # Multi-Agent Reinforcement Learning for Assumption-Free Stock Market Modeling
 
+[![license](https://img.shields.io/badge/license-BSD_3--Clause-gold.svg)](https://github.com/ChocolateDave/a2sos/blob/master/LICENSE)
 [![DOI](https://zenodo.org/badge/541341881.svg)](https://zenodo.org/badge/latestdoi/541341881)
 
 An assumption-free microscopic stock market model built upon multi-agent reinforcement learning.
