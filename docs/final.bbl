@@ -1,0 +1,103 @@
+\begin{thebibliography}{14}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Minsky(1992)]{minsky1992instability}
+Hyman~P. Minsky.
+\newblock The financial instability hypothesis.
+\newblock \emph{Levy Economics Institute of Bard College, Annandale-on-Hudson,
+  NY}, 1992.
+
+\bibitem[Blackburn and Ukhov(2008)]{blackburn2008aggregation}
+Douglas~W. Blackburn and Andrey Ukhov.
+\newblock Individual vs. aggregate preferences: The case of a small fish in a
+  big pond.
+\newblock \emph{SSRN}, 2008.
+\newblock \doi{http://dx.doi.org/10.2139/ssrn.941126}.
+
+\bibitem[Gal{\'\i}(2015)]{gali2015monetary}
+Jordi Gal{\'\i}.
+\newblock \emph{Monetary policy, inflation, and the business cycle: an
+  introduction to the new Keynesian framework and its applications}.
+\newblock Princeton University Press, 2015.
+
+\bibitem[Niazi and Hussain(2011)]{niazi2011ace}
+Muaz Niazi and Amir Hussain.
+\newblock Agent-based computing from multi-agent systems to agent-based models:
+  a visual survey.
+\newblock \emph{Scientometrics}, 89\penalty0 (2):\penalty0 479--499, 2011.
+
+\bibitem[Lussange et~al.(2021)Lussange, Lazarevich, Bourgeois-Gironde,
+  Palminteri, and Gutkin]{lussange2021modelling}
+Johann Lussange, Ivan Lazarevich, Sacha Bourgeois-Gironde, Stefano Palminteri,
+  and Boris Gutkin.
+\newblock Modelling stock markets by multi-agent reinforcement learning.
+\newblock \emph{Computational Economics}, 57\penalty0 (1):\penalty0 113--147,
+  2021.
+
+\bibitem[Song et~al.(2021)Song, Kidzi{\'n}ski, Peng, Ong, Hicks, Levine,
+  Atkeson, and Delp]{song2021deep}
+Seungmoon Song, {\L}ukasz Kidzi{\'n}ski, Xue~Bin Peng, Carmichael Ong, Jennifer
+  Hicks, Sergey Levine, Christopher~G Atkeson, and Scott~L Delp.
+\newblock Deep reinforcement learning for modeling human locomotion control in
+  neuromechanical simulation.
+\newblock \emph{Journal of neuroengineering and rehabilitation}, 18\penalty0
+  (1):\penalty0 1--17, 2021.
+
+\bibitem[Lee(2001)]{lee2001stock}
+Jae~Won Lee.
+\newblock Stock price prediction using reinforcement learning.
+\newblock In \emph{ISIE 2001. 2001 IEEE International Symposium on Industrial
+  Electronics Proceedings (Cat. No. 01TH8570)}, volume~1, pages 690--695. IEEE,
+  2001.
+
+\bibitem[Sornmayura(2019)]{sornmayura2019robust}
+Sutta Sornmayura.
+\newblock Robust forex trading with deep q network (dqn).
+\newblock \emph{ABAC Journal}, 39\penalty0 (1), 2019.
+
+\bibitem[Ertu{\u{g}}rul and Ta{\u{g}}luk(2018)]{ertuugrul2018forecasting}
+{\"O}mer~Faruk Ertu{\u{g}}rul and Mehmet~Emin Ta{\u{g}}luk.
+\newblock Forecasting financial indicators by generalized behavioral learning
+  method.
+\newblock \emph{Soft Computing}, 22\penalty0 (24):\penalty0 8259--8272, 2018.
+
+\bibitem[Corazza and Sangalli(2015)]{corazza2015q}
+Marco Corazza and Andrea Sangalli.
+\newblock Q-learning and sarsa: a comparison between two intelligent stochastic
+  control approaches for financial trading.
+\newblock \emph{University Ca'Foscari of Venice, Dept. of Economics Research
+  Paper Series No}, 15, 2015.
+
+\bibitem[Carapu{\c{c}}o et~al.(2018)Carapu{\c{c}}o, Neves, and
+  Horta]{carapucco2018reinforcement}
+Jo{\~a}o Carapu{\c{c}}o, Rui Neves, and Nuno Horta.
+\newblock Reinforcement learning applied to forex trading.
+\newblock \emph{Applied Soft Computing}, 73:\penalty0 783--794, 2018.
+
+\bibitem[Conegundes and Pereira(2020)]{conegundes2020beating}
+Leonardo Conegundes and Adriano C~Machado Pereira.
+\newblock Beating the stock market with a deep reinforcement learning day
+  trading system.
+\newblock In \emph{2020 International Joint Conference on Neural Networks
+  (IJCNN)}, pages 1--8. IEEE, 2020.
+
+\bibitem[Tilbury(2022)]{tilbury2022rl}
+Callum Tilbury.
+\newblock Reinforcement learning in macroeconomic policy design: A new
+  frontier?
+\newblock \emph{ArXiv}, 2022.
+\newblock \doi{https://doi.org/10.48550/arXiv.2206.08781}.
+
+\bibitem[Lowe et~al.(2017)Lowe, Wu, Tamar, Harb, Abbeel, and
+  Mordatch]{lowe2017maddpg}
+Ryan Lowe, Yi~Wu, Aviv Tamar, Jean Harb, Pieter Abbeel, and Igor Mordatch.
+\newblock Multi-agent actor-critic for mixed cooperative-competitive
+  environments.
+\newblock \emph{ArXiv}, 2017.
+\newblock \doi{https://doi.org/10.48550/arXiv.1706.02275}.
+
+\end{thebibliography}

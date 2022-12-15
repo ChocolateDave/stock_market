@@ -1,4 +1,5 @@
 # Additional
+.DS_Store
 logs/
 run_logs/
 
