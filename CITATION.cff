@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this source code, please cite it using bibtex as below."
+authors:
+  - family-names: Zhang
+    given-names: Maverick
+  - family-names: Lu
+    given-names: Juanwu
+    orcid: https://orcid.org/0000-0003-0831-1244
+title: "My Research Software"
+version: 0.1.0
+doi: 10.5281/zenodo.7443463
+date-released: 2022-12-15
