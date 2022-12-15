@@ -6,7 +6,7 @@ authors:
   - family-names: Lu
     given-names: Juanwu
     orcid: https://orcid.org/0000-0003-0831-1244
-title: "My Research Software"
+title: "Multi-Agent Reinforcement Learning for Assumption-Free Stock Market Modeling"
 version: 0.1.0
 doi: 10.5281/zenodo.7443463
 date-released: 2022-12-15
