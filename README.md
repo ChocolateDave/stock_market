@@ -49,7 +49,7 @@ We provide three scripts for running our codes on different settings.
 If you use this source code, please cite it using bibtex as below.
 
 ```bibtex
-@misc{Maverick2013,
+@misc{maverick2022,
   author = {Maverick, Zhang and Juanwu Lu},
   title = {Multi-Agent Reinforcement Learning for Assumption-Free Stock Market Modeling},
   year = {2022},
